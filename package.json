@@ -1,0 +1,33 @@
+{
+  "name": "oat-tools",
+  "displayName": "OAT Tools",
+  "description": "Owen's Applied Thinking — content production commands for VS Code",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.70.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onCommand:oat.promoteAllTables"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "oat.promoteAllTables",
+        "title": "OAT: Promote All Tables in Document"
+      }
+    ],
+    "configuration": {
+      "title": "OAT Tools",
+      "properties": {
+        "oat.googleOAuthToken": {
+          "type": "string",
+          "default": "",
+          "description": "Google OAuth access token (Drive + Sheets scopes). Checked after GOOGLE_OAUTH_TOKEN env var."
+        },
+        "oat.gasWebAppUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Deployed Apps Script web app URL for OAT table styling. If blank, formatting is applied directly via Sheets API."
+        }
+      }
+    }
+  }
+}
