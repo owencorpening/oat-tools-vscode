@@ -31,8 +31,7 @@ class ImagePanelProvider {
       }
     }, null, this._context.subscriptions);
 
-    // Load on open
-    this._loadStaged();
+    // Webview initiates load by sending { type: 'refresh' } once ready
   }
 
   refresh() {
@@ -287,7 +286,8 @@ function esc(s) {
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-// Initial load triggered by resolveWebviewView on the extension side
+// Webview sends refresh on load; extension responds with staged data
+vscode.postMessage({ type: 'refresh' });
 </script>
 </body>
 </html>`;
