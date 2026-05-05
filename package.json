@@ -5,10 +5,6 @@
   "version": "0.2.0",
   "engines": { "vscode": "^1.75.0" },
   "categories": ["Other"],
-  "activationEvents": [
-    "onCommand:oat.promoteAllTables",
-    "onView:oatImagePanel"
-  ],
   "main": "./extension.js",
   "contributes": {
     "viewsContainers": {
@@ -54,7 +50,7 @@
         },
         "oat.imageStagingSheetId": {
           "type": "string",
-          "default": "",
+          "default": "15Fl84stiKIyv9jGOxE5kMC5pJOXDDtyrm8TJoIlD6yc",
           "description": "Google Sheet ID for image staging. Share with oat-tools@oat-tools-owen.iam.gserviceaccount.com."
         },
         "oat.imagesRepoPath": {
