@@ -2,16 +2,41 @@
   "name": "oat-tools",
   "displayName": "OAT Tools",
   "description": "Owen's Applied Thinking — content production commands for VS Code",
-  "version": "0.1.0",
-  "engines": { "vscode": "^1.70.0" },
+  "version": "0.2.0",
+  "engines": { "vscode": "^1.75.0" },
   "categories": ["Other"],
-  "activationEvents": ["onCommand:oat.promoteAllTables"],
+  "activationEvents": [
+    "onCommand:oat.promoteAllTables",
+    "onView:oatImagePanel"
+  ],
   "main": "./extension.js",
   "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "oat-images",
+          "title": "OAT Image Staging",
+          "icon": "media/camera.svg"
+        }
+      ]
+    },
+    "views": {
+      "oat-images": [
+        {
+          "type": "webview",
+          "id": "oatImagePanel",
+          "name": "Staged Images"
+        }
+      ]
+    },
     "commands": [
       {
         "command": "oat.promoteAllTables",
         "title": "OAT: Promote All Tables in Document"
+      },
+      {
+        "command": "oat.refreshImagePanel",
+        "title": "OAT: Refresh Image Panel"
       }
     ],
     "configuration": {
@@ -20,12 +45,22 @@
         "oat.googleOAuthToken": {
           "type": "string",
           "default": "",
-          "description": "Google OAuth access token (Drive + Sheets scopes). Checked after GOOGLE_OAUTH_TOKEN env var."
+          "description": "Google OAuth access token (Drive + Sheets scopes). Fallback if no service account file."
         },
         "oat.gasWebAppUrl": {
           "type": "string",
           "default": "",
-          "description": "Deployed Apps Script web app URL for OAT table styling. If blank, formatting is applied directly via Sheets API."
+          "description": "Deployed Apps Script web app URL for OAT table styling. If blank, formatting applied via Sheets API."
+        },
+        "oat.imageStagingSheetId": {
+          "type": "string",
+          "default": "",
+          "description": "Google Sheet ID for image staging. Share with oat-tools@oat-tools-owen.iam.gserviceaccount.com."
+        },
+        "oat.imagesRepoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
         }
       }
     }

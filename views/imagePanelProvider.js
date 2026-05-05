@@ -1,0 +1,297 @@
+'use strict';
+const vscode = require('vscode');
+const crypto = require('crypto');
+const { getServiceAccountToken } = require('../lib/serviceAccountAuth');
+const { getStagedImages, updateRow } = require('../lib/imageStagingSheet');
+const { placeImage, discardPlaced } = require('../lib/imageWorkflow');
+
+class ImagePanelProvider {
+  static viewId = 'oatImagePanel';
+
+  constructor(context) {
+    this._context = context;
+    this._view = null;
+  }
+
+  // Called by VS Code when the panel becomes visible
+  resolveWebviewView(webviewView) {
+    this._view = webviewView;
+    webviewView.webview.options = { enableScripts: true };
+    webviewView.webview.html = this._html(webviewView.webview);
+
+    webviewView.webview.onDidReceiveMessage(async msg => {
+      try {
+        switch (msg.type) {
+          case 'refresh': return await this._loadStaged();
+          case 'place':   return await this._handlePlace(msg.image);
+          case 'discard': return await this._handleDiscard(msg.image);
+        }
+      } catch (err) {
+        this._send({ type: 'error', message: err.message });
+      }
+    }, null, this._context.subscriptions);
+
+    // Load on open
+    this._loadStaged();
+  }
+
+  refresh() {
+    if (this._view) this._loadStaged();
+  }
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+
+  async _loadStaged() {
+    const sheetId = this._sheetId();
+    if (!sheetId) {
+      this._send({ type: 'error', message: 'Set oat.imageStagingSheetId in VS Code settings.' });
+      return;
+    }
+    try {
+      const token = await getServiceAccountToken();
+      const images = await getStagedImages(sheetId, token);
+      this._send({ type: 'staged', images });
+    } catch (err) {
+      this._send({ type: 'error', message: err.message });
+    }
+  }
+
+  // ── Place ─────────────────────────────────────────────────────────────────
+
+  async _handlePlace(image) {
+    const target = await vscode.window.showQuickPick(
+      ['substack', 'carousel', 'linkedin-post'],
+      { placeHolder: 'Publishing target' }
+    );
+    if (!target) return;
+
+    const partNum = await vscode.window.showInputBox({
+      prompt: 'Part number (e.g. 09)',
+      placeHolder: '09',
+      validateInput: v => v && v.trim() ? null : 'Required'
+    });
+    if (!partNum) return;
+
+    const slug = await vscode.window.showInputBox({
+      prompt: 'Image slug for repo folder name (e.g. aerial-view-lake-powell)',
+      placeHolder: 'image-slug',
+      validateInput: v => v && v.trim() ? null : 'Required'
+    });
+    if (!slug) return;
+
+    let altText = slug.trim().replace(/-/g, ' ');
+    if (target === 'substack') {
+      const input = await vscode.window.showInputBox({
+        prompt: 'Alt text',
+        value: altText
+      });
+      if (input === undefined) return;
+      altText = input;
+    }
+
+    await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'OAT: Placing image…' },
+      async () => {
+        await placeImage({ image, target, partNum: partNum.trim(), slug: slug.trim(), altText });
+        const sheetId = this._sheetId();
+        const token = await getServiceAccountToken();
+        const today = new Date().toISOString().slice(0, 10);
+        await updateRow(sheetId, image.rowIndex,
+          { status: 'placed', placed_in: `part-${partNum.trim()}`, placed_date: today, target },
+          token
+        );
+      }
+    );
+
+    vscode.window.showInformationMessage(`OAT: Image placed as ${target}.`);
+    await this._loadStaged();
+  }
+
+  // ── Discard ───────────────────────────────────────────────────────────────
+
+  async _handleDiscard(image) {
+    const isPlaced = image.status === 'placed';
+    const msg = isPlaced
+      ? `This image is placed in ${image.placed_in}. Remove from article and repo?`
+      : 'Discard this image? It has not been placed anywhere.';
+
+    const choice = await vscode.window.showWarningMessage(msg, { modal: true }, 'Discard');
+    if (choice !== 'Discard') return;
+
+    if (isPlaced) await discardPlaced(image);
+
+    const sheetId = this._sheetId();
+    const token = await getServiceAccountToken();
+    await updateRow(sheetId, image.rowIndex, { status: 'discarded' }, token);
+
+    vscode.window.showInformationMessage('OAT: Image discarded.');
+    await this._loadStaged();
+  }
+
+  // ── Helpers ───────────────────────────────────────────────────────────────
+
+  _sheetId() {
+    return process.env.OAT_IMAGE_SHEET_ID ||
+      vscode.workspace.getConfiguration('oat').get('imageStagingSheetId', '');
+  }
+
+  _send(msg) {
+    if (this._view) this._view.webview.postMessage(msg);
+  }
+
+  // ── Webview HTML ──────────────────────────────────────────────────────────
+
+  _html(webview) {
+    const nonce = crypto.randomBytes(16).toString('hex');
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta http-equiv="Content-Security-Policy"
+  content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: var(--vscode-font-family);
+  font-size: var(--vscode-font-size);
+  color: var(--vscode-foreground);
+  background: var(--vscode-panel-background);
+}
+.toolbar {
+  display: flex; align-items: center; gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--vscode-panel-border);
+  position: sticky; top: 0;
+  background: var(--vscode-panel-background);
+  z-index: 1;
+}
+.count { opacity: 0.6; font-size: 11px; flex: 1; }
+.refresh-btn {
+  background: none; border: none; color: var(--vscode-foreground);
+  cursor: pointer; font-size: 14px; padding: 2px 5px; border-radius: 3px;
+}
+.refresh-btn:hover { background: var(--vscode-toolbar-hoverBackground); }
+#status { padding: 16px; text-align: center; opacity: 0.6; font-size: 12px; }
+.error { color: var(--vscode-errorForeground); }
+.card { border-bottom: 1px solid var(--vscode-panel-border); }
+.thumb-wrap {
+  width: 100%; height: 130px; overflow: hidden;
+  background: var(--vscode-input-background);
+}
+.thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.no-thumb {
+  width: 100%; height: 100%;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0.4; font-size: 11px;
+}
+.meta { padding: 6px 8px 4px; }
+.photographer { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.license { font-size: 11px; opacity: 0.65; margin-top: 1px; }
+.url-line { font-size: 10px; opacity: 0.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.actions { padding: 5px 8px 8px; display: flex; gap: 6px; }
+.btn {
+  flex: 1; padding: 4px 0; border: none; border-radius: 3px;
+  cursor: pointer; font-size: 12px;
+  font-family: var(--vscode-font-family);
+}
+.btn-place {
+  background: var(--vscode-button-background);
+  color: var(--vscode-button-foreground);
+}
+.btn-place:hover { background: var(--vscode-button-hoverBackground); }
+.btn-discard {
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+}
+.btn-discard:hover { background: var(--vscode-button-secondaryHoverBackground, #555); }
+</style>
+</head>
+<body>
+<div class="toolbar">
+  <span class="count" id="count"></span>
+  <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
+</div>
+<div id="status">Loading…</div>
+<div id="list"></div>
+
+<script nonce="${nonce}">
+const vscode = acquireVsCodeApi();
+let images = [];
+
+document.getElementById('refreshBtn').addEventListener('click', () => {
+  document.getElementById('status').textContent = 'Loading…';
+  document.getElementById('status').className = '';
+  document.getElementById('status').style.display = 'block';
+  document.getElementById('list').innerHTML = '';
+  document.getElementById('count').textContent = '';
+  vscode.postMessage({ type: 'refresh' });
+});
+
+window.addEventListener('message', e => {
+  const msg = e.data;
+  if (msg.type === 'staged') {
+    images = msg.images;
+    render();
+  } else if (msg.type === 'error') {
+    document.getElementById('status').textContent = '⚠ ' + msg.message;
+    document.getElementById('status').className = 'error';
+    document.getElementById('status').style.display = 'block';
+    document.getElementById('list').innerHTML = '';
+    document.getElementById('count').textContent = '';
+  }
+});
+
+function render() {
+  const status = document.getElementById('status');
+  const list   = document.getElementById('list');
+  const count  = document.getElementById('count');
+
+  if (images.length === 0) {
+    status.textContent = 'No staged images.';
+    status.className = '';
+    status.style.display = 'block';
+    list.innerHTML = '';
+    count.textContent = '';
+    return;
+  }
+
+  status.style.display = 'none';
+  count.textContent = images.length + ' staged';
+  list.innerHTML = images.map((img, i) => {
+    const thumbHtml = img.url
+      ? '<img class="thumb" src="' + esc(img.url) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=no-thumb>No preview</div>\'">'
+      : '<div class="no-thumb">No URL</div>';
+    return (
+      '<div class="card">' +
+        '<div class="thumb-wrap">' + thumbHtml + '</div>' +
+        '<div class="meta">' +
+          '<div class="photographer">' + esc(img.photographer || '(no photographer)') + '</div>' +
+          '<div class="license">'      + esc(img.license      || '')                  + '</div>' +
+          '<div class="url-line">'     + esc(img.url          || '')                  + '</div>' +
+        '</div>' +
+        '<div class="actions">' +
+          '<button class="btn btn-place"   onclick="place('   + i + ')">Place</button>' +
+          '<button class="btn btn-discard" onclick="discard(' + i + ')">Discard</button>' +
+        '</div>' +
+      '</div>'
+    );
+  }).join('');
+}
+
+function place(i)   { vscode.postMessage({ type: 'place',   image: images[i] }); }
+function discard(i) { vscode.postMessage({ type: 'discard', image: images[i] }); }
+
+function esc(s) {
+  return (s || '')
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+// Initial load triggered by resolveWebviewView on the extension side
+</script>
+</body>
+</html>`;
+  }
+}
+
+module.exports = { ImagePanelProvider };

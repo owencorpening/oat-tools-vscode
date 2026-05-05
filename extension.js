@@ -4,12 +4,27 @@ const https = require('https');
 const { parseTables } = require('./lib/parseTables');
 const { createSheet, writeValues, publishSheet, colToLetter } = require('./lib/sheetsApi');
 const { applyOatFormat } = require('./lib/oatFormat');
+const { ImagePanelProvider } = require('./views/imagePanelProvider');
 
 function activate(context) {
+  // Existing command: promote all markdown tables in active document
   context.subscriptions.push(
     vscode.commands.registerCommand('oat.promoteAllTables', promoteAllTables)
   );
+
+  // Image staging panel
+  const imagePanel = new ImagePanelProvider(context);
+  context.subscriptions.push(
+    vscode.window.registerWebviewViewProvider(ImagePanelProvider.viewId, imagePanel)
+  );
+
+  // Manual refresh command (e.g. from command palette)
+  context.subscriptions.push(
+    vscode.commands.registerCommand('oat.refreshImagePanel', () => imagePanel.refresh())
+  );
 }
+
+// ── Promote All Tables ───────────────────────────────────────────────────────
 
 async function promoteAllTables() {
   const editor = vscode.window.activeTextEditor;
@@ -120,14 +135,12 @@ async function promoteAllTables() {
     return;
   }
 
-  // Apply bottom-up so earlier line numbers stay valid
   replacements.sort((a, b) => b.startLine - a.startLine);
 
   const succeeded = await editor.edit(editBuilder => {
     for (const r of replacements) {
       const start = new vscode.Position(r.startLine, 0);
-      // endLine + 1 to consume the trailing newline of the last table row
-      const end = new vscode.Position(r.endLine + 1, 0);
+      const end   = new vscode.Position(r.endLine + 1, 0);
       editBuilder.replace(new vscode.Range(start, end), r.embed + '\n');
     }
   });
@@ -141,11 +154,8 @@ async function promoteAllTables() {
   }
 }
 
-// Descriptor: camelCase of first header cell content
 function generateDescriptor(headers) {
-  const raw = headers[0]
-    .replace(/[^a-zA-Z0-9 ]/g, '')
-    .trim();
+  const raw = headers[0].replace(/[^a-zA-Z0-9 ]/g, '').trim();
   const words = raw.split(/\s+/).filter(Boolean);
   if (words.length === 0) return 'table';
   return words
@@ -156,22 +166,17 @@ function generateDescriptor(headers) {
     .join('');
 }
 
-// POST to GAS web app endpoint to apply OAT style
-// Deployed Code.gs must expose doPost(e) that calls applyOatStyle by spreadsheetId
 function callGasWebApp(url, spreadsheetId) {
   return new Promise((resolve, reject) => {
     const target = new URL(url);
     target.searchParams.set('spreadsheetId', spreadsheetId);
-
     const options = {
       hostname: target.hostname,
       path: target.pathname + target.search,
       method: 'POST',
       headers: { 'Content-Length': '0' }
     };
-
     const req = https.request(options, res => {
-      // GAS web apps redirect from /exec to /macros/... — follow once
       if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
         return callGasWebApp(res.headers.location, spreadsheetId).then(resolve).catch(reject);
       }
@@ -182,7 +187,6 @@ function callGasWebApp(url, spreadsheetId) {
         else reject(new Error(`GAS returned HTTP ${res.statusCode}: ${body}`));
       });
     });
-
     req.on('error', reject);
     req.end();
   });
