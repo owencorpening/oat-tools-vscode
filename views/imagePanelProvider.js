@@ -64,6 +64,7 @@ class ImagePanelProvider {
       console.log('[OAT] got images:', images.length);
       await Promise.all(images.map(async img => {
         img.thumbUrl = await resolveThumbUrl(img.imageSrc, img.url);
+        console.log('[OAT-THUMB]', (img.url || '').slice(0, 55), '->', img.thumbUrl ? img.thumbUrl.slice(0, 50) : null);
       }));
       this._send({ type: 'staged', images });
     } catch (err) {
