@@ -19,7 +19,13 @@ class ImagePanelProvider {
     webviewView.webview.options = { enableScripts: true };
     webviewView.webview.html = this._html(webviewView.webview);
 
+    // Proactive ping — confirms extension→webview channel works
+    setTimeout(() => {
+      this._send({ type: 'ping' });
+    }, 1000);
+
     webviewView.webview.onDidReceiveMessage(async msg => {
+      console.log('[OAT] webview message received:', msg.type);
       try {
         switch (msg.type) {
           case 'refresh': return await this._loadStaged();
@@ -27,6 +33,7 @@ class ImagePanelProvider {
           case 'discard': return await this._handleDiscard(msg.image);
         }
       } catch (err) {
+        console.error('[OAT] message handler error:', err);
         this._send({ type: 'error', message: err.message });
       }
     }, null, this._context.subscriptions);
@@ -41,16 +48,22 @@ class ImagePanelProvider {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async _loadStaged() {
+    console.log('[OAT] _loadStaged called');
     const sheetId = this._sheetId();
+    console.log('[OAT] sheetId:', sheetId);
     if (!sheetId) {
       this._send({ type: 'error', message: 'Set oat.imageStagingSheetId in VS Code settings.' });
       return;
     }
     try {
+      console.log('[OAT] getting SA token...');
       const token = await getServiceAccountToken();
+      console.log('[OAT] got token, fetching staged images...');
       const images = await getStagedImages(sheetId, token);
+      console.log('[OAT] got images:', images.length);
       this._send({ type: 'staged', images });
     } catch (err) {
+      console.error('[OAT] _loadStaged error:', err);
       this._send({ type: 'error', message: err.message });
     }
   }
@@ -228,7 +241,9 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
 
 window.addEventListener('message', e => {
   const msg = e.data;
-  if (msg.type === 'staged') {
+  if (msg.type === 'ping') {
+    document.getElementById('status').textContent = 'Extension alive — waiting for data…';
+  } else if (msg.type === 'staged') {
     images = msg.images;
     render();
   } else if (msg.type === 'error') {
@@ -257,9 +272,9 @@ function render() {
   status.style.display = 'none';
   count.textContent = images.length + ' staged';
   list.innerHTML = images.map((img, i) => {
-    const thumbHtml = img.url
-      ? '<img class="thumb" src="' + esc(img.url) + '" alt="" loading="lazy" onerror="this.parentNode.innerHTML=\'<div class=no-thumb>No preview</div>\'">'
-      : '<div class="no-thumb">No URL</div>';
+    const thumbHtml = img.imageSrc
+      ? '<img class="thumb" src="' + esc(img.imageSrc) + '" alt="" loading="lazy">'
+      : '<div class="no-thumb">No preview</div>';
     return (
       '<div class="card">' +
         '<div class="thumb-wrap">' + thumbHtml + '</div>' +
@@ -269,16 +284,29 @@ function render() {
           '<div class="url-line">'     + esc(img.url          || '')                  + '</div>' +
         '</div>' +
         '<div class="actions">' +
-          '<button class="btn btn-place"   onclick="place('   + i + ')">Place</button>' +
-          '<button class="btn btn-discard" onclick="discard(' + i + ')">Discard</button>' +
+          '<button class="btn btn-place"   data-i="' + i + '">Place</button>' +
+          '<button class="btn btn-discard" data-i="' + i + '">Discard</button>' +
         '</div>' +
       '</div>'
     );
   }).join('');
-}
 
-function place(i)   { vscode.postMessage({ type: 'place',   image: images[i] }); }
-function discard(i) { vscode.postMessage({ type: 'discard', image: images[i] }); }
+  list.querySelectorAll('.thumb').forEach(img => {
+    img.addEventListener('error', function() {
+      this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
+    });
+  });
+  list.querySelectorAll('.btn-place').forEach(btn => {
+    btn.addEventListener('click', function() {
+      vscode.postMessage({ type: 'place', image: images[+this.dataset.i] });
+    });
+  });
+  list.querySelectorAll('.btn-discard').forEach(btn => {
+    btn.addEventListener('click', function() {
+      vscode.postMessage({ type: 'discard', image: images[+this.dataset.i] });
+    });
+  });
+}
 
 function esc(s) {
   return (s || '')
@@ -288,6 +316,15 @@ function esc(s) {
 
 // Webview sends refresh on load; extension responds with staged data
 vscode.postMessage({ type: 'refresh' });
+
+setTimeout(() => {
+  const s = document.getElementById('status');
+  if (s && s.style.display !== 'none' && !s.classList.contains('error')) {
+    s.textContent = '⚠ Timeout — no response from extension (check Output → Extension Host)';
+    s.className = 'error';
+    s.style.display = 'block';
+  }
+}, 8000);
 </script>
 </body>
 </html>`;

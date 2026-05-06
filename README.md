@@ -131,18 +131,55 @@ Example: `part09-table-component`
 
 ---
 
+## Image Staging Panel
+
+The camera icon in the activity bar opens the Image Staging panel. It reads
+from the Google Sheet set in `oat.imageStagingSheetId` and shows all rows
+where column H (`status`) is `staged`.
+
+### Sheet column layout
+
+| Col | Field | Notes |
+|-----|-------|-------|
+| A | Date | |
+| B | Name | |
+| C | URL | Attribution/source page URL — shown in panel, used for attribution |
+| D | Photographer | |
+| E | License | |
+| F | Substack Post Title | |
+| G | Attribution String | |
+| H | status | `staged`, `placed`, or `discarded` |
+| I | placed_in | e.g. `part-09` |
+| J | placed_date | ISO date |
+| K | target | `substack`, `carousel`, `linkedin-post` |
+| L | image_src | **Direct image URL for thumbnail preview** |
+
+### Enabling thumbnails
+
+To enable thumbnails, paste the direct image URL (ending in `.jpg`, `.png`,
+`.webp`, etc.) into **column L** for each row. Column C retains the
+attribution/source page URL and is unaffected.
+
+If column L is empty, the panel shows "No preview" for that row.
+
+---
+
 ## File structure
 
 ```
 oat-tools-vscode/
-├── package.json       ← command registration, settings schema
-├── extension.js       ← command handler, GAS web app caller
+├── package.json              ← command registration, settings schema
+├── extension.js              ← command handler, GAS web app caller
 ├── lib/
-│   ├── request.js     ← https API helper with redirect follow
-│   ├── parseTables.js ← markdown table parser
-│   ├── sheetsApi.js   ← Drive/Sheets REST API (create, write, publish)
-│   └── oatFormat.js   ← OAT formatting via Sheets API batchUpdate
-└── README.md
+│   ├── request.js            ← https API helper with redirect follow
+│   ├── parseTables.js        ← markdown table parser
+│   ├── sheetsApi.js          ← Drive/Sheets REST API (create, write, publish)
+│   ├── oatFormat.js          ← OAT formatting via Sheets API batchUpdate
+│   ├── serviceAccountAuth.js ← service account JWT + token exchange
+│   ├── imageStagingSheet.js  ← reads/updates the image staging sheet (A:L)
+│   └── imageWorkflow.js      ← place/discard image file operations
+└── views/
+    └── imagePanelProvider.js ← webview panel for staged images
 ```
 
 ---
