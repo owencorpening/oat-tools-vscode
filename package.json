@@ -57,6 +57,11 @@
           "type": "string",
           "default": "",
           "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
+        },
+        "oat.unsplashAccessKey": {
+          "type": "string",
+          "default": "",
+          "description": "Unsplash API Access Key for thumbnail previews in the Image Staging panel."
         }
       }
     }

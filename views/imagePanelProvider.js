@@ -53,10 +53,14 @@ class ImagePanelProvider {
       return;
     }
     try {
+      const cfg = vscode.workspace.getConfiguration('oat');
+      const unsplashKey = cfg.get('unsplashAccessKey', '');
       const token = await getServiceAccountToken();
       const images = await getStagedImages(sheetId, token);
       await Promise.all(images.map(async img => {
-        img.thumbUrl = await resolveThumbUrl(img.imageSrc, img.url);
+        const resolved = await resolveThumbUrl(img.imageSrc, img.url, unsplashKey);
+        img.thumbUrl = resolved.thumbUrl;
+        if (resolved.url) img.url = resolved.url;
       }));
       this._send({ type: 'staged', images });
     } catch (err) {
