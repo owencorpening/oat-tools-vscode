@@ -26,7 +26,6 @@ class ImagePanelProvider {
     }, 1000);
 
     webviewView.webview.onDidReceiveMessage(async msg => {
-      console.log('[OAT] webview message received:', msg.type);
       try {
         switch (msg.type) {
           case 'refresh': return await this._loadStaged();
@@ -34,7 +33,6 @@ class ImagePanelProvider {
           case 'discard': return await this._handleDiscard(msg.image);
         }
       } catch (err) {
-        console.error('[OAT] message handler error:', err);
         this._send({ type: 'error', message: err.message });
       }
     }, null, this._context.subscriptions);
@@ -49,26 +47,19 @@ class ImagePanelProvider {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async _loadStaged() {
-    console.log('[OAT] _loadStaged called');
     const sheetId = this._sheetId();
-    console.log('[OAT] sheetId:', sheetId);
     if (!sheetId) {
       this._send({ type: 'error', message: 'Set oat.imageStagingSheetId in VS Code settings.' });
       return;
     }
     try {
-      console.log('[OAT] getting SA token...');
       const token = await getServiceAccountToken();
-      console.log('[OAT] got token, fetching staged images...');
       const images = await getStagedImages(sheetId, token);
-      console.log('[OAT] got images:', images.length);
       await Promise.all(images.map(async img => {
         img.thumbUrl = await resolveThumbUrl(img.imageSrc, img.url);
-        console.log('[OAT-THUMB]', (img.url || '').slice(0, 55), '->', img.thumbUrl ? img.thumbUrl.slice(0, 50) : null);
       }));
       this._send({ type: 'staged', images });
     } catch (err) {
-      console.error('[OAT] _loadStaged error:', err);
       this._send({ type: 'error', message: err.message });
     }
   }
