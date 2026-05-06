@@ -260,7 +260,7 @@ window.addEventListener('message', e => {
 function getThumbSrc(imageSrc, url) {
   if (imageSrc) return { type: 'img', src: imageSrc };
   if (!url) return { type: 'none' };
-  if (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(url)) return { type: 'img', src: url };
+  if (/\\.(jpe?g|png|webp|gif)(\\?|$)/i.test(url)) return { type: 'img', src: url };
   if (url.includes('unsplash.com/photos/')) {
     const slug = url.split('/photos/')[1].split('?')[0].split('#')[0].split('/')[0];
     const id   = slug.split('-').pop();
