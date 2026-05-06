@@ -160,7 +160,7 @@ class ImagePanelProvider {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src https:;">
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -255,6 +255,33 @@ window.addEventListener('message', e => {
   }
 });
 
+// Returns {type:'img',src} | {type:'pexels',pageUrl} | {type:'none'}
+// imageSrc (col L) overrides auto-detection when present.
+function getThumbSrc(imageSrc, url) {
+  if (imageSrc) return { type: 'img', src: imageSrc };
+  if (!url) return { type: 'none' };
+  if (/\.(jpe?g|png|webp|gif)(\?|$)/i.test(url)) return { type: 'img', src: url };
+  if (url.includes('unsplash.com/photos/')) {
+    const slug = url.split('/photos/')[1].split('?')[0].split('#')[0].split('/')[0];
+    const id   = slug.split('-').pop();
+    return { type: 'img', src: 'https://images.unsplash.com/photo-' + id + '?w=400&q=80' };
+  }
+  if (url.includes('pexels.com/photo/')) return { type: 'pexels', pageUrl: url };
+  return { type: 'none' };
+}
+
+async function fetchPexelsThumb(pageUrl) {
+  try {
+    const resp = await fetch(pageUrl);
+    const html = await resp.text();
+    const m = html.match(/property=["']og:image["'][^>]+content=["']([^"']+)["']/)
+           || html.match(/content=["']([^"']+)["'][^>]+property=["']og:image["']/);
+    return m ? m[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 function render() {
   const status = document.getElementById('status');
   const list   = document.getElementById('list');
@@ -272,9 +299,15 @@ function render() {
   status.style.display = 'none';
   count.textContent = images.length + ' staged';
   list.innerHTML = images.map((img, i) => {
-    const thumbHtml = img.imageSrc
-      ? '<img class="thumb" src="' + esc(img.imageSrc) + '" alt="" loading="lazy">'
-      : '<div class="no-thumb">No preview</div>';
+    const resolved = getThumbSrc(img.imageSrc, img.url);
+    let thumbHtml;
+    if (resolved.type === 'img') {
+      thumbHtml = '<img class="thumb" src="' + esc(resolved.src) + '" alt="" loading="lazy">';
+    } else if (resolved.type === 'pexels') {
+      thumbHtml = '<div class="no-thumb" data-pexels="' + esc(resolved.pageUrl) + '">…</div>';
+    } else {
+      thumbHtml = '<div class="no-thumb">No preview</div>';
+    }
     return (
       '<div class="card">' +
         '<div class="thumb-wrap">' + thumbHtml + '</div>' +
@@ -305,6 +338,23 @@ function render() {
     btn.addEventListener('click', function() {
       vscode.postMessage({ type: 'discard', image: images[+this.dataset.i] });
     });
+  });
+
+  list.querySelectorAll('[data-pexels]').forEach(async placeholder => {
+    const pageUrl = placeholder.dataset.pexels;
+    const src = await fetchPexelsThumb(pageUrl);
+    if (src) {
+      const img = document.createElement('img');
+      img.className = 'thumb';
+      img.alt = '';
+      img.src = src;
+      img.addEventListener('error', () => {
+        img.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
+      });
+      placeholder.replaceWith(img);
+    } else {
+      placeholder.textContent = 'No preview';
+    }
   });
 }
 
