@@ -77,34 +77,39 @@ class ImagePanelProvider {
     );
     if (!target) return;
 
+    // Auto-detect part number from active editor file path
+    const editorPath = vscode.window.activeTextEditor?.document?.uri?.fsPath || '';
+    const partMatch  = editorPath.match(/part-(\d+)/i);
+    const detectedPart = partMatch ? partMatch[1] : '';
+
     const partNum = await vscode.window.showInputBox({
-      prompt: 'Part number (e.g. 09)',
-      placeHolder: '09',
+      prompt: 'Part number',
+      value: detectedPart,
       validateInput: v => v && v.trim() ? null : 'Required'
     });
     if (!partNum) return;
 
+    // Derive slug from image camelCase name → kebab-case
+    const derivedSlug = (image.name || '')
+      .replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+
     const slug = await vscode.window.showInputBox({
-      prompt: 'Image slug for repo folder name (e.g. aerial-view-lake-powell)',
-      placeHolder: 'image-slug',
+      prompt: 'Image slug',
+      value: derivedSlug,
       validateInput: v => v && v.trim() ? null : 'Required'
     });
     if (!slug) return;
 
-    let altText = slug.trim().replace(/-/g, ' ');
-    if (target === 'substack') {
-      const input = await vscode.window.showInputBox({
-        prompt: 'Alt text',
-        value: altText
-      });
-      if (input === undefined) return;
-      altText = input;
-    }
+    const figNum = await vscode.window.showInputBox({
+      prompt: 'Figure number',
+      validateInput: v => v && v.trim() ? null : 'Required'
+    });
+    if (!figNum) return;
 
     await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'OAT: Placing image…' },
       async () => {
-        await placeImage({ image, target, partNum: partNum.trim(), slug: slug.trim(), altText });
+        await placeImage({ image, target, partNum: partNum.trim(), slug: slug.trim(), figNum: figNum.trim() });
         const sheetId = this._sheetId();
         const token = await getServiceAccountToken();
         const today = new Date().toISOString().slice(0, 10);
@@ -240,14 +245,18 @@ document.getElementById('refreshBtn').addEventListener('click', () => {
   vscode.postMessage({ type: 'refresh' });
 });
 
+let _timeoutId = null;
+
 window.addEventListener('message', e => {
   const msg = e.data;
   if (msg.type === 'ping') {
     document.getElementById('status').textContent = 'Extension alive — waiting for data…';
   } else if (msg.type === 'staged') {
+    clearTimeout(_timeoutId);
     images = msg.images;
     render();
   } else if (msg.type === 'error') {
+    clearTimeout(_timeoutId);
     document.getElementById('status').textContent = '⚠ ' + msg.message;
     document.getElementById('status').className = 'error';
     document.getElementById('status').style.display = 'block';
@@ -262,7 +271,7 @@ function render() {
   const count  = document.getElementById('count');
 
   if (images.length === 0) {
-    status.textContent = 'No staged images.';
+    status.textContent = 'Queue empty — log an image to get started.';
     status.className = '';
     status.style.display = 'block';
     list.innerHTML = '';
@@ -318,7 +327,7 @@ function esc(s) {
 // Webview sends refresh on load; extension responds with staged data
 vscode.postMessage({ type: 'refresh' });
 
-setTimeout(() => {
+_timeoutId = setTimeout(() => {
   const s = document.getElementById('status');
   if (s && s.style.display !== 'none' && !s.classList.contains('error')) {
     s.textContent = '⚠ Timeout — no response from extension (check Output → Extension Host)';
