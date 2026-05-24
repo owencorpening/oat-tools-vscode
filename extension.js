@@ -174,16 +174,17 @@ function callGas(url, payload) {
       }
     };
 
-    function doRequest(opts, body) {
+    function doRequest(opts, postBody) {
       const req = https.request({ ...opts, timeout: 30000 }, res => {
         if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+          // GAS redirects the POST to an echo endpoint that only accepts GET
           const loc = new URL(res.headers.location);
           return doRequest({
             hostname: loc.hostname,
             path: loc.pathname + loc.search,
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
-          }, body);
+            method: 'GET',
+            headers: {}
+          }, null);
         }
         let data = '';
         res.on('data', c => data += c);
@@ -200,7 +201,7 @@ function callGas(url, payload) {
       });
       req.on('error', reject);
       req.on('timeout', () => req.destroy(new Error('GAS request timeout (30s)')));
-      req.write(body);
+      if (postBody) req.write(postBody);
       req.end();
     }
 
