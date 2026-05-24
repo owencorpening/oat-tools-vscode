@@ -6,8 +6,6 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { parseTables } = require('./lib/parseTables');
-const { createSheet, writeValues, publishSheet } = require('./lib/sheetsApi');
-const { getServiceAccountToken } = require('./lib/serviceAccountAuth');
 const { ImagePanelProvider } = require('./views/imagePanelProvider');
 
 function activate(context) {
@@ -41,11 +39,11 @@ async function promoteAllTables() {
     return;
   }
 
-  let token;
-  try {
-    token = await getServiceAccountToken();
-  } catch (err) {
-    vscode.window.showErrorMessage(`OAT: Failed to get Google credentials — ${err.message}`);
+  const gasUrl = vscode.workspace.getConfiguration('oat').get('gasWebAppUrl', '');
+  if (!gasUrl) {
+    vscode.window.showErrorMessage(
+      'OAT: GAS web app URL not set. Add oat.gasWebAppUrl to VS Code settings.'
+    );
     return;
   }
 
@@ -98,15 +96,16 @@ async function promoteAllTables() {
         const title = `part${partNum.trim()}-table-${descriptor}`;
 
         try {
-          const { spreadsheetId } = await createSheet(title, token);
-          await writeValues(spreadsheetId, [table.headers, ...table.rows], token);
-          await publishSheet(spreadsheetId, token);
+          const { spreadsheetId, sheetUrl } = await callGas(gasUrl, {
+            title,
+            headers: table.headers,
+            rows: table.rows
+          });
 
           const pngUrl = await renderLocalPng(
             title, table.headers, table.rows,
             partNum.trim(), series.trim()
           );
-          const sheetUrl = `https://docs.google.com/spreadsheets/d/${spreadsheetId}`;
           const imgWidth = Math.max(400, table.headers.length * 140);
 
           const embed =
@@ -157,6 +156,56 @@ function generateDescriptor(headers) {
       : w.charAt(0).toUpperCase() + w.slice(1).toLowerCase()
     )
     .join('');
+}
+
+// ── GAS web app call ─────────────────────────────────────────────────────────
+
+function callGas(url, payload) {
+  return new Promise((resolve, reject) => {
+    const body = JSON.stringify(payload);
+    const urlObj = new URL(url);
+    const options = {
+      hostname: urlObj.hostname,
+      path: urlObj.pathname + urlObj.search,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body)
+      }
+    };
+
+    function doRequest(opts, body) {
+      const req = https.request({ ...opts, timeout: 30000 }, res => {
+        if ((res.statusCode === 301 || res.statusCode === 302) && res.headers.location) {
+          const loc = new URL(res.headers.location);
+          return doRequest({
+            hostname: loc.hostname,
+            path: loc.pathname + loc.search,
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) }
+          }, body);
+        }
+        let data = '';
+        res.on('data', c => data += c);
+        res.on('end', () => {
+          try {
+            const r = JSON.parse(data);
+            if (r.error) reject(new Error(r.error));
+            else if (!r.spreadsheetId) reject(new Error(`Unexpected GAS response: ${data}`));
+            else resolve(r);
+          } catch {
+            reject(new Error(`GAS returned non-JSON: ${data.slice(0, 200)}`));
+          }
+        });
+      });
+      req.on('error', reject);
+      req.on('timeout', () => req.destroy(new Error('GAS request timeout (30s)')));
+      req.write(body);
+      req.end();
+    }
+
+    doRequest(options, body);
+  });
 }
 
 // ── Local render pipeline ────────────────────────────────────────────────────
