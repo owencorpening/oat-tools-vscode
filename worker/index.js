@@ -22,8 +22,8 @@ export default {
 
     try {
       const token = await getAccessToken(env);
-      const spreadsheetId = await createSheet(token, title, headers, rows);
-      await applyOatStyle(token, spreadsheetId, headers.length, rows.length);
+      const { spreadsheetId, sheetId } = await createSheet(token, title, headers, rows);
+      await applyOatStyle(token, spreadsheetId, sheetId, headers.length, rows.length);
       await makePublic(token, spreadsheetId);
       return json({
         spreadsheetId,
@@ -61,6 +61,7 @@ async function createSheet(token, title, headers, rows) {
     sheets: [{ properties: { title: 'Sheet1' } }]
   });
   const { spreadsheetId } = res;
+  const sheetId = res.sheets[0].properties.sheetId;
 
   const values = [headers, ...rows];
   await sheetsRequest(
@@ -69,11 +70,10 @@ async function createSheet(token, title, headers, rows) {
     { values }
   );
 
-  return spreadsheetId;
+  return { spreadsheetId, sheetId };
 }
 
-async function applyOatStyle(token, spreadsheetId, numCols, numDataRows) {
-  const sheetId = 0;
+async function applyOatStyle(token, spreadsheetId, sheetId, numCols, numDataRows) {
   const totalRows = numDataRows + 1;
 
   const requests = [
