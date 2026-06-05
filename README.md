@@ -2,6 +2,11 @@
 
 Owen's Applied Thinking content production commands.
 
+This extension currently combines two tools:
+
+- table promotion for markdown articles
+- image staging and placement for the publishing workflow
+
 ---
 
 ## Commands
@@ -45,7 +50,7 @@ Reload VS Code. Commands appear in the Command Palette.
 | `oat.unsplashAccessKey` | No | Unsplash API key for image panel thumbnails |
 | `oat.imageStagingSheetId` | No | Google Sheet ID for image staging panel |
 | `oat.imagesRepoPath` | No | Local images repo. Defaults to `~/dev/images` |
-| `oat.screenshotScriptPath` | No | Local screenshot script for table PNG rendering |
+| `oat.screenshotScriptPath` | No | Local screenshot script for table PNG rendering. Defaults to `scripts/screenshot-html.sh` in this extension if present, then `~/dev/wraith/scripts/screenshot-html.sh` |
 
 Set in `settings.json`:
 ```json
@@ -97,6 +102,17 @@ npx wrangler deploy
 The camera icon in the activity bar opens the Image Staging panel. Reads from the
 Google Sheet set in `oat.imageStagingSheetId` and shows rows where column H is `staged`.
 
+The panel can:
+
+1. Resolve thumbnails from `image_src`, direct image URLs, Unsplash, or page metadata
+2. Place images into the local images repo
+3. Insert Substack and carousel snippets into the active editor
+4. Copy LinkedIn image handoff text to the clipboard
+5. Mark rows as `placed` or `discarded` in the staging sheet
+
+Image staging uses a local service account credential at `credentials/service-account.json`.
+Share the staging sheet with that service account.
+
 ---
 
 ## File structure
@@ -107,11 +123,22 @@ oat-tools-vscode/
 ├── package.json              ← command registration, settings schema
 ├── lib/
 │   ├── parseTables.js        ← markdown table parser
-│   └── imageStagingSheet.js  ← image staging sheet reader
+│   ├── imageStagingSheet.js  ← image staging sheet reader/updater
+│   ├── imageWorkflow.js      ← image placement/discard workflow
+│   ├── serviceAccountAuth.js ← service account token helper
+│   ├── thumbResolver.js      ← thumbnail resolver
+│   └── request.js            ← Google API request helper
 ├── scripts/
-│   └── get-refresh-token.js  ← OAuth flow + auto-sets Worker secrets ★
+│   ├── get-refresh-token.js  ← OAuth flow + auto-sets Worker secrets
+│   ├── render-table-pngs.sh  ← batch table PNG render helper
+│   ├── publish-sheets.sh     ← Apps Script publish helper
+│   └── init-sheet-columns.py ← staging sheet column setup helper
 ├── views/
 │   └── imagePanelProvider.js ← webview panel for staged images
+├── gas/
+│   └── promote-tables.gs     ← Apps Script table helper
+├── test/
+│   └── parseTables.test.js   ← markdown table parser tests
 └── worker/
     ├── index.js              ← Cloudflare Worker (sheet creation + OAT styling)
     └── wrangler.toml         ← Worker config
