@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // One-time script to get a Google OAuth refresh token.
-// Run: node scripts/get-refresh-token.js
+// Run: node extensions/table-tools/scripts/get-refresh-token.js
 // Paste your client_id and client_secret from GCP Console when prompted.
 
 const http     = require('http');

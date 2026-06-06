@@ -2,18 +2,19 @@
 """
 Add status/placed_in/placed_date/target columns to the image staging sheet.
 Run from any terminal with network access:
-  /home/owen/.venv/songster/bin/python3 scripts/init-sheet-columns.py
+  /home/owen/.venv/songster/bin/python3 extensions/image-staging/scripts/init-sheet-columns.py
 """
 import json, urllib.request, urllib.parse
+from pathlib import Path
 from google.oauth2 import service_account
 import google.auth.transport.requests
 
 SHEET_ID = '15Fl84stiKIyv9jGOxE5kMC5pJOXDDtyrm8TJoIlD6yc'
-SA_FILE  = '/home/owen/dev/oat-tools-vscode/credentials/service-account.json'
+SA_FILE  = Path(__file__).resolve().parents[3] / 'credentials' / 'service-account.json'
 BASE     = f'https://sheets.googleapis.com/v4/spreadsheets/{SHEET_ID}/values'
 
 creds = service_account.Credentials.from_service_account_file(
-    SA_FILE, scopes=['https://www.googleapis.com/auth/spreadsheets'])
+    str(SA_FILE), scopes=['https://www.googleapis.com/auth/spreadsheets'])
 creds.refresh(google.auth.transport.requests.Request())
 token = creds.token
 

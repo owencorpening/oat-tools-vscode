@@ -1,0 +1,61 @@
+{
+  "name": "oat-image-staging",
+  "publisher": "owencorpening",
+  "displayName": "OAT Image Staging",
+  "description": "Owen's Applied Thinking image staging and placement panel for VS Code",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "oat-image-staging",
+          "title": "OAT Image Staging",
+          "icon": "media/camera.svg"
+        }
+      ]
+    },
+    "views": {
+      "oat-image-staging": [
+        {
+          "type": "webview",
+          "id": "oatImages.panel",
+          "name": "Staged Images"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "oatImages.refreshPanel",
+        "title": "OAT Images: Refresh Image Panel"
+      }
+    ],
+    "configuration": {
+      "title": "OAT Image Staging",
+      "properties": {
+        "oatImages.sheetId": {
+          "type": "string",
+          "default": "15Fl84stiKIyv9jGOxE5kMC5pJOXDDtyrm8TJoIlD6yc",
+          "description": "Google Sheet ID for image staging."
+        },
+        "oatImages.imagesRepoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
+        },
+        "oatImages.serviceAccountPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the Google service account JSON. Defaults to credentials/service-account.json in this extension, then the monorepo root credentials directory."
+        },
+        "oatImages.unsplashAccessKey": {
+          "type": "string",
+          "default": "",
+          "description": "Unsplash API Access Key for thumbnail previews."
+        }
+      }
+    }
+  }
+}

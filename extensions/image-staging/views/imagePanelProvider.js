@@ -7,7 +7,7 @@ const { placeImage, discardPlaced } = require('../lib/imageWorkflow');
 const { resolveThumbUrl } = require('../lib/thumbResolver');
 
 class ImagePanelProvider {
-  static viewId = 'oatImagePanel';
+  static viewId = 'oatImages.panel';
 
   constructor(context) {
     this._context = context;
@@ -49,13 +49,12 @@ class ImagePanelProvider {
   async _loadStaged() {
     const sheetId = this._sheetId();
     if (!sheetId) {
-      this._send({ type: 'error', message: 'Set oat.imageStagingSheetId in VS Code settings.' });
+      this._send({ type: 'error', message: 'Set oatImages.sheetId in VS Code settings.' });
       return;
     }
     try {
-      const cfg = vscode.workspace.getConfiguration('oat');
-      const unsplashKey = cfg.get('unsplashAccessKey', '');
-      const token = await getServiceAccountToken();
+      const unsplashKey = getSetting('unsplashAccessKey', '');
+      const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
       const images = await getStagedImages(sheetId, token);
       await Promise.all(images.map(async img => {
         const resolved = await resolveThumbUrl(img.imageSrc, img.url, unsplashKey);
@@ -111,7 +110,7 @@ class ImagePanelProvider {
       async () => {
         await placeImage({ image, target, partNum: partNum.trim(), slug: slug.trim(), figNum: figNum.trim() });
         const sheetId = this._sheetId();
-        const token = await getServiceAccountToken();
+        const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
         const today = new Date().toISOString().slice(0, 10);
         await updateRow(sheetId, image.rowIndex,
           { status: 'placed', placed_in: `part-${partNum.trim()}`, placed_date: today, target },
@@ -138,7 +137,7 @@ class ImagePanelProvider {
     if (isPlaced) await discardPlaced(image);
 
     const sheetId = this._sheetId();
-    const token = await getServiceAccountToken();
+    const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
     await updateRow(sheetId, image.rowIndex, { status: 'discarded' }, token);
 
     vscode.window.showInformationMessage('OAT: Image discarded.');
@@ -149,6 +148,7 @@ class ImagePanelProvider {
 
   _sheetId() {
     return process.env.OAT_IMAGE_SHEET_ID ||
+      getSetting('sheetId', '') ||
       vscode.workspace.getConfiguration('oat').get('imageStagingSheetId', '');
   }
 
@@ -342,3 +342,9 @@ _timeoutId = setTimeout(() => {
 }
 
 module.exports = { ImagePanelProvider };
+
+function getSetting(key, defaultValue) {
+  const imageValue = vscode.workspace.getConfiguration('oatImages').get(key, undefined);
+  if (imageValue !== undefined && imageValue !== '') return imageValue;
+  return vscode.workspace.getConfiguration('oat').get(key, defaultValue);
+}

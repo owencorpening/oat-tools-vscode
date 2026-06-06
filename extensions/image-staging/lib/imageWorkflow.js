@@ -6,8 +6,14 @@ const cp     = require('child_process');
 const vscode = require('vscode');
 
 function imagesRepo() {
-  return vscode.workspace.getConfiguration('oat').get('imagesRepoPath', '')
+  return getSetting('imagesRepoPath', '')
     || path.join(process.env.HOME, 'dev', 'images');
+}
+
+function getSetting(key, defaultValue) {
+  const imageValue = vscode.workspace.getConfiguration('oatImages').get(key, undefined);
+  if (imageValue !== undefined && imageValue !== '') return imageValue;
+  return vscode.workspace.getConfiguration('oat').get(key, defaultValue);
 }
 
 // ── Place ────────────────────────────────────────────────────────────────────

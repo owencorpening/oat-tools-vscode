@@ -1,7 +1,10 @@
 # OAT Tools Extension Split Plan
 
-Draft plan for splitting the current combined `oat-tools` VS Code extension into
-two separately installable extensions inside this monorepo.
+Plan and implementation notes for splitting the former combined `oat-tools` VS
+Code extension into two separately installable extensions inside this monorepo.
+
+Status: implemented in the monorepo layout. Keep this doc as the migration map
+and follow-up checklist.
 
 ## Goal
 
@@ -48,47 +51,47 @@ Node helper code is cheaper than coupling the two extensions too early.
 
 ### Table Tools
 
-Current files likely owned by `extensions/table-tools/`:
+Files owned by `extensions/table-tools/`:
 
-- `extension.js` table-promotion command code
-- `lib/parseTables.js`
-- `test/parseTables.test.js`
-- `worker/index.js`
-- `worker/wrangler.toml`
-- `scripts/get-refresh-token.js`
+- `extensions/table-tools/extension.js`
+- `extensions/table-tools/lib/parseTables.js`
+- `extensions/table-tools/test/parseTables.test.js`
+- `extensions/table-tools/worker/index.js`
+- `extensions/table-tools/worker/wrangler.toml`
+- `extensions/table-tools/scripts/get-refresh-token.js`
 - table screenshot/render scripts and helpers
 
-Current settings to rename:
+Settings renamed:
 
 - `oat.workerUrl` -> `oatTables.workerUrl`
 - `oat.imagesRepoPath` -> `oatTables.imagesRepoPath`
 - `oat.screenshotScriptPath` -> `oatTables.screenshotScriptPath`
 
-Current command to rename:
+Command renamed:
 
 - `oat.promoteAllTables` -> `oatTables.promoteAllTables`
 
 ### Image Staging
 
-Current files likely owned by `extensions/image-staging/`:
+Files owned by `extensions/image-staging/`:
 
-- `views/imagePanelProvider.js`
-- `media/camera.svg`
-- `lib/imageStagingSheet.js`
-- `lib/imageWorkflow.js`
-- `lib/serviceAccountAuth.js`
-- `lib/thumbResolver.js`
-- `lib/request.js`
-- `credentials/service-account.json`
+- `extensions/image-staging/views/imagePanelProvider.js`
+- `extensions/image-staging/media/camera.svg`
+- `extensions/image-staging/lib/imageStagingSheet.js`
+- `extensions/image-staging/lib/imageWorkflow.js`
+- `extensions/image-staging/lib/serviceAccountAuth.js`
+- `extensions/image-staging/lib/thumbResolver.js`
+- `extensions/image-staging/lib/request.js`
+- `credentials/service-account.json` remains ignored at the monorepo root for local development
 - image staging sheet setup helpers
 
-Current settings to rename:
+Settings renamed:
 
 - `oat.imageStagingSheetId` -> `oatImages.sheetId`
 - `oat.unsplashAccessKey` -> `oatImages.unsplashAccessKey`
 - `oat.imagesRepoPath` -> `oatImages.imagesRepoPath`
 
-Current command/view IDs to rename:
+Command/view IDs renamed:
 
 - `oat.refreshImagePanel` -> `oatImages.refreshPanel`
 - `oat-images` -> `oat-image-staging`
@@ -96,17 +99,20 @@ Current command/view IDs to rename:
 
 ## Migration Sequence
 
-1. Keep the current root extension working.
-2. Extract table-promotion logic into table-focused modules at the root.
-3. Move table files into `extensions/table-tools/`.
-4. Give Table Tools its own `package.json` and local install instructions.
-5. Run parser tests and manually smoke-test command registration.
-6. Move image staging files into `extensions/image-staging/`.
-7. Give Image Staging its own `package.json` and local install instructions.
-8. Manually smoke-test panel load, refresh, place, and discard flows.
-9. Remove the old combined root extension package only after both split extensions
-   load independently.
-10. Update the root README to describe the monorepo and both install paths.
+Completed:
+
+1. Moved table files into `extensions/table-tools/`.
+2. Moved image staging files into `extensions/image-staging/`.
+3. Gave each extension its own `package.json`.
+4. Converted the root `package.json` into monorepo metadata.
+5. Updated the root README to describe both install paths.
+
+Remaining manual validation:
+
+1. Install both extension folders with separate symlinks.
+2. Confirm Table Tools command registration in VS Code.
+3. Confirm Image Staging activity bar registration in VS Code.
+4. Smoke-test table promotion and image placement against live credentials.
 
 ## Test Plan
 
@@ -135,9 +141,9 @@ boundaries matter more than speed.
 
 ## Open Questions
 
-- Should credentials remain inside each extension directory, or should local docs
-  point to a configurable credential path?
+- Should local credentials remain at the monorepo root, move into the Image
+  Staging extension, or always be supplied through `oatImages.serviceAccountPath`?
 - Should the hard-coded `water-series` image path become a setting during the split?
 - Should `gas/promote-tables.gs` stay with Table Tools, or be archived if the Worker
   is now the canonical table-promotion backend?
-- Should old `oat.*` settings be read as fallbacks for one transition release?
+- When can the old `oat.*` setting fallbacks be removed?

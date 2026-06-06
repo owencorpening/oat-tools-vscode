@@ -4,22 +4,24 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-const SA_PATH = path.join(__dirname, '..', 'credentials', 'service-account.json');
+const LOCAL_SA_PATH = path.join(__dirname, '..', 'credentials', 'service-account.json');
+const MONOREPO_SA_PATH = path.join(__dirname, '..', '..', '..', 'credentials', 'service-account.json');
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const SCOPES = 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/drive';
 
 let _cached = null;
 let _expiry = 0;
 
-async function getServiceAccountToken() {
+async function getServiceAccountToken(options = {}) {
   const now = Math.floor(Date.now() / 1000);
   if (_cached && now < _expiry - 60) return _cached;
 
   let sa;
+  const saPath = resolveServiceAccountPath(options.credentialPath);
   try {
-    sa = JSON.parse(fs.readFileSync(SA_PATH, 'utf8'));
+    sa = JSON.parse(fs.readFileSync(saPath, 'utf8'));
   } catch (e) {
-    throw new Error(`OAT: failed to read service account credentials: ${e.message}`);
+    throw new Error(`OAT Images: failed to read service account credentials at ${saPath}: ${e.message}`);
   }
 
   const iat = now;
@@ -45,6 +47,13 @@ async function getServiceAccountToken() {
   _cached = token;
   _expiry = exp;
   return token;
+}
+
+function resolveServiceAccountPath(configuredPath) {
+  if (configuredPath) return configuredPath;
+  if (process.env.OAT_SERVICE_ACCOUNT_PATH) return process.env.OAT_SERVICE_ACCOUNT_PATH;
+  if (fs.existsSync(LOCAL_SA_PATH)) return LOCAL_SA_PATH;
+  return MONOREPO_SA_PATH;
 }
 
 function b64url(str) {
@@ -84,4 +93,4 @@ function exchangeJwt(jwt) {
   });
 }
 
-module.exports = { getServiceAccountToken };
+module.exports = { getServiceAccountToken, resolveServiceAccountPath };

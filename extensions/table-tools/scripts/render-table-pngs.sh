@@ -10,10 +10,19 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SA_FILE="${SCRIPT_DIR}/../credentials/service-account.json"
+MONOREPO_SA_FILE="${SCRIPT_DIR}/../../../credentials/service-account.json"
 
 if [[ -f "$SA_FILE" ]]; then
-  echo "Auth: service account ($SA_FILE)"
-  TOKEN=$(/home/owen/.venv/songster/bin/python3 - "$SA_FILE" <<'PYAUTH'
+  AUTH_FILE="$SA_FILE"
+elif [[ -f "$MONOREPO_SA_FILE" ]]; then
+  AUTH_FILE="$MONOREPO_SA_FILE"
+else
+  AUTH_FILE=""
+fi
+
+if [[ -n "$AUTH_FILE" ]]; then
+  echo "Auth: service account ($AUTH_FILE)"
+  TOKEN=$(/home/owen/.venv/songster/bin/python3 - "$AUTH_FILE" <<'PYAUTH'
 import sys
 from google.oauth2 import service_account
 import google.auth.transport.requests

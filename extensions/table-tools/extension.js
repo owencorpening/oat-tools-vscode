@@ -6,23 +6,11 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const { parseTables } = require('./lib/parseTables');
-const { ImagePanelProvider } = require('./views/imagePanelProvider');
+const { estimateTableImageWidth } = require('./lib/tableImageWidth');
 
 function activate(context) {
-  // Existing command: promote all markdown tables in active document
   context.subscriptions.push(
-    vscode.commands.registerCommand('oat.promoteAllTables', promoteAllTables)
-  );
-
-  // Image staging panel
-  const imagePanel = new ImagePanelProvider(context);
-  context.subscriptions.push(
-    vscode.window.registerWebviewViewProvider(ImagePanelProvider.viewId, imagePanel)
-  );
-
-  // Manual refresh command (e.g. from command palette)
-  context.subscriptions.push(
-    vscode.commands.registerCommand('oat.refreshImagePanel', () => imagePanel.refresh())
+    vscode.commands.registerCommand('oatTables.promoteAllTables', promoteAllTables)
   );
 }
 
@@ -39,10 +27,10 @@ async function promoteAllTables() {
     return;
   }
 
-  const workerUrl = vscode.workspace.getConfiguration('oat').get('workerUrl', '');
+  const workerUrl = getSetting('workerUrl', '');
   if (!workerUrl) {
     vscode.window.showErrorMessage(
-      'OAT: Worker URL not set. Add oat.workerUrl to VS Code settings.'
+      'OAT Tables: Worker URL not set. Add oatTables.workerUrl to VS Code settings.'
     );
     return;
   }
@@ -102,15 +90,15 @@ async function promoteAllTables() {
             rows: table.rows
           });
 
-          const pngUrl = await renderLocalPng(
+          const fallbackImageWidth = estimateTableImageWidth(table.headers, table.rows);
+          const { pngUrl, imageWidth } = await renderLocalPng(
             title, table.headers, table.rows,
-            partNum.trim(), series.trim()
+            partNum.trim(), series.trim(), fallbackImageWidth
           );
-          const imgWidth = Math.max(400, table.headers.length * 140);
 
           const embed =
             `<figure>\n` +
-            `  <img width="${imgWidth}" src="${pngUrl}" alt="${descriptor} data table">\n` +
+            `  <img width="${imageWidth}" src="${pngUrl}" alt="${descriptor} data table">\n` +
             `  <figcaption><a href="${sheetUrl}">View full data table</a></figcaption>\n` +
             `</figure>`;
 
@@ -206,18 +194,24 @@ function execFile(command, args, options = {}) {
 }
 
 function imagesRepoPath() {
-  return vscode.workspace.getConfiguration('oat').get('imagesRepoPath', '')
+  return getSetting('imagesRepoPath', '')
     || path.join(os.homedir(), 'dev', 'images');
 }
 
 function screenshotScriptPath() {
-  const configured = vscode.workspace.getConfiguration('oat').get('screenshotScriptPath', '');
+  const configured = getSetting('screenshotScriptPath', '');
   if (configured) return configured;
 
   const localScript = path.join(__dirname, 'scripts', 'screenshot-html.sh');
   if (fs.existsSync(localScript)) return localScript;
 
   return path.join(os.homedir(), 'dev', 'wraith', 'scripts', 'screenshot-html.sh');
+}
+
+function getSetting(key, defaultValue) {
+  const tableValue = vscode.workspace.getConfiguration('oatTables').get(key, undefined);
+  if (tableValue !== undefined && tableValue !== '') return tableValue;
+  return vscode.workspace.getConfiguration('oat').get(key, defaultValue);
 }
 
 function escapeHtml(s) {
@@ -240,8 +234,9 @@ function renderOatHtml(headers, rows) {
   return `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
-  body{margin:0;padding:16px;background:#fff;font-family:Arial,sans-serif;}
-  table{border-collapse:collapse;width:100%;}
+  body{margin:0;background:transparent;font-family:Arial,sans-serif;}
+  .table-frame{display:inline-block;padding:16px;background:#fff;}
+  table{border-collapse:collapse;width:max-content;}
   th{background:#005f73;color:#fff;font-size:16px;font-weight:bold;padding:0 12px;height:40px;vertical-align:middle;text-align:left;border-right:1px solid #94d2bd;white-space:nowrap;}
   th:last-child{border-right:none;}
   thead tr{border-bottom:2px solid #94d2bd;}
@@ -251,10 +246,10 @@ function renderOatHtml(headers, rows) {
   tr.odd td{background:#fff;}
   tr.total td{font-weight:bold;background:#e8f4f5;border-top:2px solid #94d2bd;}
 </style></head>
-<body><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></body></html>`;
+<body><div class="table-frame"><table><thead><tr>${ths}</tr></thead><tbody>${trs}</tbody></table></div></body></html>`;
 }
 
-async function renderLocalPng(title, headers, rows, partNum, series) {
+async function renderLocalPng(title, headers, rows, partNum, series, imageWidth) {
   const html = renderOatHtml(headers, rows);
   const tmpHtml = path.join(os.tmpdir(), `${title}.html`);
   fs.writeFileSync(tmpHtml, html, 'utf8');
@@ -268,7 +263,8 @@ async function renderLocalPng(title, headers, rows, partNum, series) {
   if (!fs.existsSync(script)) {
     throw new Error(`Screenshot script not found: ${script}`);
   }
-  await execFile('bash', [script, tmpHtml, outPng, '700']);
+  const screenshotOutput = await execFile('bash', [script, tmpHtml, outPng, String(imageWidth)]);
+  const renderedWidth = parseRenderedWidth(screenshotOutput) || imageWidth;
 
   const relPath = `generated/${series}/part-${partNum}/${title}.png`;
   await execFile('git', ['-C', imagesRepo, 'add', relPath]);
@@ -279,7 +275,24 @@ async function renderLocalPng(title, headers, rows, partNum, series) {
     if (!e.message.includes('nothing to commit')) throw e;
   }
 
-  return `https://raw.githubusercontent.com/owencorpening/images/main/${relPath}`;
+  return {
+    pngUrl: `https://raw.githubusercontent.com/owencorpening/images/main/${relPath}`,
+    imageWidth: renderedWidth
+  };
+}
+
+function parseRenderedWidth(output) {
+  const text = String(output || '').trim();
+  const jsonLine = text.split(/\r?\n/).reverse().find(line => line.trim().startsWith('{'));
+  if (!jsonLine) return null;
+
+  try {
+    const parsed = JSON.parse(jsonLine);
+    const width = Number(parsed.width);
+    return Number.isFinite(width) && width > 0 ? Math.ceil(width) : null;
+  } catch {
+    return null;
+  }
 }
 
 function deactivate() {}

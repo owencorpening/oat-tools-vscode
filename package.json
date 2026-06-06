@@ -1,72 +1,10 @@
 {
-  "name": "oat-tools",
-  "displayName": "OAT Tools",
-  "description": "Owen's Applied Thinking — content production commands for VS Code",
+  "name": "oat-tools-vscode",
+  "description": "Monorepo for Owen's Applied Thinking VS Code extensions",
+  "private": true,
   "version": "0.2.0",
-  "engines": { "vscode": "^1.75.0" },
-  "categories": ["Other"],
-  "main": "./extension.js",
   "scripts": {
-    "test": "node test/parseTables.test.js"
-  },
-  "contributes": {
-    "viewsContainers": {
-      "activitybar": [
-        {
-          "id": "oat-images",
-          "title": "OAT Image Staging",
-          "icon": "media/camera.svg"
-        }
-      ]
-    },
-    "views": {
-      "oat-images": [
-        {
-          "type": "webview",
-          "id": "oatImagePanel",
-          "name": "Staged Images"
-        }
-      ]
-    },
-    "commands": [
-      {
-        "command": "oat.promoteAllTables",
-        "title": "OAT: Promote All Tables in Document"
-      },
-      {
-        "command": "oat.refreshImagePanel",
-        "title": "OAT: Refresh Image Panel"
-      }
-    ],
-    "configuration": {
-      "title": "OAT Tools",
-      "properties": {
-        "oat.workerUrl": {
-          "type": "string",
-          "default": "",
-          "description": "Cloudflare Worker URL for OAT table promotion (creates Google Sheet, returns embed data)."
-        },
-        "oat.imageStagingSheetId": {
-          "type": "string",
-          "default": "15Fl84stiKIyv9jGOxE5kMC5pJOXDDtyrm8TJoIlD6yc",
-          "description": "Google Sheet ID for image staging. Share with oat-tools@oat-tools-owen.iam.gserviceaccount.com."
-        },
-        "oat.imagesRepoPath": {
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
-        },
-        "oat.screenshotScriptPath": {
-          "type": "string",
-          "default": "",
-          "description": "Absolute path to screenshot-html.sh. Defaults to scripts/screenshot-html.sh in this extension if present, then ~/dev/wraith/scripts/screenshot-html.sh."
-        },
-        "oat.unsplashAccessKey": {
-          "type": "string",
-          "default": "",
-          "description": "Unsplash API Access Key for thumbnail previews in the Image Staging panel."
-        }
-      }
-    }
+    "test": "node extensions/table-tools/test/parseTables.test.js && node extensions/table-tools/test/tableImageWidth.test.js",
+    "test:table-tools": "node extensions/table-tools/test/parseTables.test.js && node extensions/table-tools/test/tableImageWidth.test.js"
   }
 }

@@ -1,0 +1,41 @@
+{
+  "name": "oat-table-tools",
+  "publisher": "owencorpening",
+  "displayName": "OAT Table Tools",
+  "description": "Owen's Applied Thinking table promotion commands for VS Code",
+  "version": "0.1.0",
+  "engines": { "vscode": "^1.75.0" },
+  "categories": ["Other"],
+  "main": "./extension.js",
+  "scripts": {
+    "test": "node test/parseTables.test.js && node test/tableImageWidth.test.js"
+  },
+  "contributes": {
+    "commands": [
+      {
+        "command": "oatTables.promoteAllTables",
+        "title": "OAT Tables: Promote All Tables in Document"
+      }
+    ],
+    "configuration": {
+      "title": "OAT Table Tools",
+      "properties": {
+        "oatTables.workerUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Cloudflare Worker URL for OAT table promotion."
+        },
+        "oatTables.imagesRepoPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to the local images repo. Defaults to ~/dev/images."
+        },
+        "oatTables.screenshotScriptPath": {
+          "type": "string",
+          "default": "",
+          "description": "Absolute path to screenshot-html.sh. Defaults to scripts/screenshot-html.sh in this extension if present, then ~/dev/wraith/scripts/screenshot-html.sh."
+        }
+      }
+    }
+  }
+}
