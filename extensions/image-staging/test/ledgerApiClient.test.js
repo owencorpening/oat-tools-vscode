@@ -16,6 +16,8 @@ async function testClientPostsExpectedPayloads() {
 
   await client.saveReviewImageNeed({ contentDraft: { id: 'draft-1' }, imageNeed: { id: 'need-1' } });
   await client.saveAsset({ asset: { id: 'asset-1' } });
+  await client.listOpenNeeds({ contentDraftId: 'draft-1' });
+  await client.listStagedAssets();
 
   assert.strictEqual(calls[0][0], 'https://ledger.example.com/api/review-image-needs');
   assert.strictEqual(calls[0][1].method, 'POST');
@@ -23,6 +25,10 @@ async function testClientPostsExpectedPayloads() {
   assert.deepStrictEqual(calls[0][1].body.imageNeed, { id: 'need-1' });
   assert.strictEqual(calls[1][0], 'https://ledger.example.com/api/assets');
   assert.deepStrictEqual(calls[1][1].body.asset, { id: 'asset-1' });
+  assert.strictEqual(calls[2][0], 'https://ledger.example.com/api/image-needs/open?contentDraftId=draft-1');
+  assert.strictEqual(calls[2][1].method, 'GET');
+  assert.strictEqual(calls[3][0], 'https://ledger.example.com/api/assets/staged');
+  assert.strictEqual(calls[3][1].method, 'GET');
 }
 
 function testSettingsFactory() {
@@ -34,6 +40,7 @@ function testSettingsFactory() {
 
   assert.strictEqual(empty, null);
   assert.strictEqual(typeof client.saveAsset, 'function');
+  assert.strictEqual(typeof client.listOpenNeeds, 'function');
 }
 
 function fakeVscode(settings) {

@@ -42,6 +42,14 @@
       {
         "command": "oatImages.intakeUrl",
         "title": "OAT Images: Intake URL"
+      },
+      {
+        "command": "oatImages.listOpenNeeds",
+        "title": "OAT Images: List Open Image Needs"
+      },
+      {
+        "command": "oatImages.listStagedAssets",
+        "title": "OAT Images: List Staged D1 Assets"
       }
     ],
     "configuration": {

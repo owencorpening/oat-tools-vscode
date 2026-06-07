@@ -21,6 +21,19 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         token,
         body: payload
       });
+    },
+    listOpenNeeds({ contentDraftId } = {}) {
+      const query = contentDraftId ? `?contentDraftId=${encodeURIComponent(contentDraftId)}` : '';
+      return request(`${normalizedBase}/image-needs/open${query}`, {
+        method: 'GET',
+        token
+      });
+    },
+    listStagedAssets() {
+      return request(`${normalizedBase}/assets/staged`, {
+        method: 'GET',
+        token
+      });
     }
   };
 }
