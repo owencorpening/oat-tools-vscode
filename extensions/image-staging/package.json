@@ -38,6 +38,10 @@
       {
         "command": "oatImages.intakeLocalFile",
         "title": "OAT Images: Intake Local File"
+      },
+      {
+        "command": "oatImages.intakeUrl",
+        "title": "OAT Images: Intake URL"
       }
     ],
     "configuration": {
