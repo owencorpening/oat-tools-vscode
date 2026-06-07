@@ -25,16 +25,23 @@ wrangler d1 create oat-publishing-ledger
 Apply migrations after adding the D1 binding to a Wrangler config:
 
 ```bash
-wrangler d1 migrations apply oat-publishing-ledger --local
-wrangler d1 migrations apply oat-publishing-ledger --remote
+npm run ledger:migrations:list:local
+npm run ledger:migrations:apply:local
+npm run ledger:migrations:apply:remote
 ```
 
 The Worker config lives in `worker/wrangler.jsonc` and points its D1 binding at
 `../migrations`, so the commands can be run from the `worker/` directory once
 the placeholder `database_id` has been replaced.
 
-Do not run these as part of local code review unless you intend to create or
-mutate a real Cloudflare D1 database.
+Do not run the remote apply command as part of local code review unless you
+intend to mutate a real Cloudflare D1 database.
+
+Run the Worker locally after local migrations have been applied:
+
+```bash
+npm run ledger:dev
+```
 
 ## Worker API
 
