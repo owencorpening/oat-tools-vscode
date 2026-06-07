@@ -7,6 +7,15 @@ This repo is a monorepo with two separately installable extensions:
 - `OAT Table Tools` for markdown table promotion
 - `OAT Image Staging` for staged image placement
 
+For the workflow-level guide to what each tool is for and how to use it, see
+[docs/use-cases.md](docs/use-cases.md). For the working architecture target that
+reconciles these extensions with the content standards, see
+[docs/image-pipeline-architecture.md](docs/image-pipeline-architecture.md). For
+the broader repository split plan, see
+[docs/repo-refactor-plan.md](docs/repo-refactor-plan.md). For the inventory of
+tool-like files being migrated from the current content workspace, see
+[docs/tool-migration-inventory.md](docs/tool-migration-inventory.md).
+
 ---
 
 ## Extensions
@@ -50,6 +59,11 @@ Command:
 
 The panel reads from the Google Sheet set in `oatImages.sheetId` and shows rows
 where column H is `staged`.
+
+Architecture target: move image staging state to Cloudflare D1 and retire the
+Google Sheet as an image workflow dependency. Google Sheets remain part of table
+promotion because the generated sheet is the reader-facing accessible data
+artifact.
 
 The panel can:
 
@@ -154,7 +168,13 @@ oat-tools-vscode/
 │       ├── media/
 │       └── scripts/
 ├── docs/
-│   └── split-plan.md
+│   ├── image-pipeline-architecture.md
+│   ├── repo-refactor-plan.md
+│   ├── split-plan.md
+│   ├── tool-migration-inventory.md
+│   └── use-cases.md
+├── tools/
+│   └── blockquotes/
 └── package.json
 ```
 

@@ -4,6 +4,7 @@
   "private": true,
   "version": "0.2.0",
   "scripts": {
+    "render:blockquotes": "python3 tools/blockquotes/blockquote-renderer.py",
     "test": "node extensions/table-tools/test/parseTables.test.js && node extensions/table-tools/test/tableImageWidth.test.js",
     "test:table-tools": "node extensions/table-tools/test/parseTables.test.js && node extensions/table-tools/test/tableImageWidth.test.js"
   }
