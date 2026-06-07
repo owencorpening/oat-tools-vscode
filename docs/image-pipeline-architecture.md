@@ -113,6 +113,37 @@ review, generate it from D1 rather than making it an operational dependency.
 Keep Google Sheets only for promoted tables when the sheet itself is the
 reader-facing accessible data artifact.
 
+## Fresh-Start Plan
+
+If continuity with the current staging sheet is not important, prefer a fresh
+D1-native implementation over migration compatibility.
+
+Fresh-start rules:
+
+- Treat the existing image staging sheet as historical reference only.
+- Do not build new sheet-backed adapters or import jobs unless a specific legacy
+  row is still needed.
+- Keep the current sheet-based panel working as the old tool until the new D1
+  flow is usable.
+- Build the new ledger, intake, saga, and panel against D1 from the first
+  implementation step.
+
+Fresh-start baby steps:
+
+1. Create the first D1 schema for `asset`, `asset_placement`, `image_need`,
+   `content_draft`, and `asset_saga`.
+2. Add `assetLedgerD1.js` with small ledger functions:
+   `createAsset`, `createPlacement`, `createImageNeed`, `markSagaStep`,
+   `markPlaced`, `markFailed`, `listOpenNeeds`, and `listStagedAssets`.
+3. Add path-specific intake functions in `imageIntake.js` for URLs, Downloads
+   files, AI-generated files, user-provided files, and review-triggered needs.
+4. Add a thin `imagePipeline.js` that runs one D1-backed placement saga from an
+   existing asset record to a placed snippet.
+5. Build a new VS Code command or panel entry point for D1 assets instead of
+   retrofitting the sheet panel first.
+6. After image placement works, route table screenshots through the same asset
+   saga and shared asset repo utilities.
+
 Keep Git for:
 
 - Final, publishable assets.
@@ -219,21 +250,24 @@ D1 can make the ledger transactional, but it cannot make filesystem writes, Git
 commits, table Google Sheet creation, and editor edits part of one database
 transaction. Model those steps as an idempotent saga:
 
-| Step | Forward action | Idempotency key | Compensation or retry rule |
-|------|----------------|-----------------|-----------------------------|
-| 1 | Create or update an asset record with `status = publishing`. | `asset.id` or `contentHash` for local files. | Restore previous status if no external side effect has happened. |
-| 2 | Write or move files into a staging location. | Staging path derived from `asset.id`. | Delete staging files if the asset is discarded before promotion. |
-| 3 | Promote accepted files into the asset repo. | Repo-relative `assetPath`. | Re-run as overwrite-if-same-hash; otherwise stop for manual conflict review. |
-| 4 | Write provenance files and optional `asset.json`. | Repo-relative metadata paths. | Re-run as replace; provenance should be deterministic from the asset record. |
-| 5 | Commit and push final assets. | Git tree state plus commit message containing `asset.id` or slug. | Retry push if commit exists; if commit failed, re-run add/commit on the same paths. |
-| 6 | Insert or replace the draft snippet. | `asset_placement.id` and `draftLocation`. | Replace an existing generated snippet for the same placement instead of inserting a duplicate. |
-| 7 | Mark the `asset_placement` `placed` and the asset `published` when appropriate. | `asset_placement.id`. | Recompute from repo state and draft snippet if the ledger update failed after side effects. |
+| Step | Forward action | Idempotency key | Compensation or retry rule | Resolution |
+|------|----------------|-----------------|-----------------------------|------------|
+| 1 | Create or update an asset record with `status = publishing`. | `asset.id` or `contentHash` for local files. | Restore previous status if no external side effect has happened. | `auto-retry` or `discard` |
+| 2 | Write or move files into a staging location. | Staging path derived from `asset.id`. | Delete staging files if the asset is discarded before promotion. | `auto-retry` or `discard` |
+| 3 | Promote accepted files into the asset repo. | Repo-relative `assetPath`. | Re-run as overwrite-if-same-hash; otherwise stop for manual conflict review. | `auto-retry` or `manual-review` |
+| 4 | Write provenance files and optional `asset.json`. | Repo-relative metadata paths. | Re-run as replace; provenance should be deterministic from the asset record. | `auto-retry` |
+| 5 | Commit and push final assets. | Git tree state plus commit message containing `asset.id` or slug. | Retry push if commit exists; if commit failed, re-run add/commit on the same paths. | `auto-retry` or `manual-review` |
+| 6 | Insert or replace the draft snippet. | `asset_placement.id` and `draftLocation`. | Replace an existing generated snippet for the same placement instead of inserting a duplicate. | `auto-retry` or `manual-review` |
+| 7 | Mark the `asset_placement` `placed` and the asset `published` when appropriate. | `asset_placement.id`. | Recompute from repo state and draft snippet if the ledger update failed after side effects. | `auto-retry` |
 
 Each saga record should store `current_step`, `last_error`, `retry_count`,
-`next_retry_at`, and a short `compensation` note. If any step fails, keep the
-current step and error in D1 so the pipeline can retry or clean up deliberately.
-This is safer than scattering half-finished state across `~/Downloads`, `/tmp`,
-legacy image sheets, and the asset repo.
+`next_retry_at`, `resolution`, and a short `compensation` note. `resolution`
+drives UI behavior: `auto-retry` can be retried by the orchestrator, `manual-review`
+needs a VS Code notification or queue item, and `discard` runs cleanup for
+abandoned work. If any step fails, keep the current step and error in D1 so the
+pipeline can retry or clean up deliberately. This is safer than scattering
+half-finished state across `~/Downloads`, `/tmp`, legacy image sheets, and the
+asset repo.
 
 ## Review-Triggered Image Hunt
 
@@ -362,7 +396,7 @@ and saga retry state is a migration gap to close.
 ```text
 extensions/image-staging/lib/
 ├── imageRecord.js        # normalize and validate records
-├── imageIntake.js        # URL capture, Downloads, AI file, and user-provided intake
+├── imageIntake.js        # composed intake functions for URL, Downloads, AI, and user files
 ├── assetLedgerD1.js      # D1 asset records, state transitions, retry log
 ├── imageAssetsRepo.js    # asset repo paths, provenance files, raw URLs, git
 ├── imagePipeline.js      # thin saga orchestrator and retry routing
@@ -381,3 +415,14 @@ thin: it calls `assetLedgerD1` for steps 1 and 7, `imageAssetsRepo` for file and
 Git side effects, and `snippetBuilder` for target-specific output. It should not
 become the home for record validation, repo path rules, thumbnail resolution, or
 provider-specific intake logic.
+
+`imageIntake.js` should compose separate intake functions for URL capture,
+Downloads files, AI-generated files, and user-provided files. Each intake path
+has different inference and provenance rules, so the module should avoid becoming
+a single branching handler.
+
+`imageAssetsRepo.js` and `tableAssetsRepo.js` should share common asset repo
+utilities for path resolution, provenance file writes, raw URL generation, and
+Git add/commit/push. As table screenshots move fully onto the same asset saga,
+`tableAssetsRepo.js` should either become a thin table-specific wrapper around
+the shared utilities or merge into the shared asset repo module.
