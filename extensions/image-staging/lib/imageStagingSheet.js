@@ -1,5 +1,6 @@
 'use strict';
 const { apiRequest } = require('./request');
+const { normalizeImageRecords } = require('./imageRecord');
 
 // Actual sheet column layout (A-L, 0-based array indices):
 // A=Date  B=Name  C=URL  D=Photographer  E=License
@@ -21,7 +22,7 @@ async function getAllRows(sheetId, token) {
   }
   const rows = (data.values || []);
   if (rows.length < 2) return [];
-  return rows.slice(1).map((row, i) => ({
+  return normalizeImageRecords(rows.slice(1).map((row, i) => ({
     rowIndex: i + 2, // 1-based sheet row, skip header
     name:         row[COL.name]         || '',
     url:          row[COL.url]          || '',
@@ -33,7 +34,7 @@ async function getAllRows(sheetId, token) {
     placed_date:  row[COL.placed_date]  || '',
     target:       row[COL.target]       || '',
     imageSrc:     row[COL.imageSrc]     || ''
-  }));
+  })));
 }
 
 async function getStagedImages(sheetId, token) {

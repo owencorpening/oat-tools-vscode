@@ -33,8 +33,10 @@ Core D1 entities:
 | Entity | Purpose |
 |--------|---------|
 | `content_item` | Article, carousel, LinkedIn post, table, or other publishable work. |
+| `content_draft` | Working draft identity before publication, including repo path, draft path, and optional heading anchors. |
 | `asset` | Image, table screenshot, generated diagram, source file, or hosted media item. |
 | `asset_placement` | Join between a content item and an asset, including figure number, target, URL, and status. |
+| `image_need` | Review-time visual need tied to a draft location, reason, status, and eventual resolved asset. |
 | `publication_channel` | Substack, LinkedIn, Buffer, raw GitHub, or another distribution surface. |
 | `publication_event` | When a content item was published, where, and with which URL. |
 | `audience_member` | A person or account known to the system. Store only what is needed. |
@@ -65,6 +67,18 @@ Audience and payment rules:
 - Public content and public assets can live in Git. Private audience state lives
   in the ledger.
 
+Model assets and placements separately:
+
+- `asset` owns intake, identity, provenance, file hashes, license state, final
+  public asset path, and raw asset URL.
+- `asset_placement` owns publication target, figure number, draft insertion
+  location, target-specific snippet state, placement status, and published URL.
+- A single asset may have multiple placements, such as a Substack figure, a
+  carousel background, and a LinkedIn handoff.
+- During migration, legacy sheet fields such as `target`, `placed_in`, and
+  `figureNumber` can be normalized into `asset_placement` rows rather than kept
+  as long-term asset fields.
+
 ## Ledger Choice
 
 Cloudflare D1 is the preferred shared ledger because this repo already uses
@@ -75,6 +89,8 @@ removes Google Sheets from the image workflow target.
 Use D1 for:
 
 - Asset records and immutable asset IDs.
+- Content draft records and draft locations when a visual need is tied to a
+  working markdown file rather than a published content item.
 - Intake state for captured URLs, Downloads files, AI-generated files, and
   review-triggered image hunts.
 - Provenance fields and manual-check flags.
@@ -134,11 +150,13 @@ Images can enter the pipeline from several places:
   stretch of prose and decides the article needs a visual break, such as a
   diagram, map, table, or sourced image at that location.
 
-The pipeline should normalize all of these into an image record before placement.
+The pipeline should normalize all of these into an asset record or an
+`image_need` before placement. Placement-specific choices should be captured only
+when the user decides where and how the asset will be used.
 
-## Image Record
+## Asset And Placement Records
 
-A normalized image record should carry:
+A normalized asset record should carry intake and provenance fields:
 
 | Field | Purpose |
 |-------|---------|
@@ -148,35 +166,74 @@ A normalized image record should carry:
 | `sourcePath` | Local file path when the image starts on disk. |
 | `sourceUrl` | Original web/source URL when known. |
 | `imageSrc` | Direct downloadable image URL when known. |
+| `contentHash` | File hash used to deduplicate local intake and make retries idempotent. |
 | `photographer` | Photographer, creator, or `Owen Corpening` for originals. |
 | `license` | License string or explicit manual-check status. |
 | `attribution` | Caption-ready attribution string. |
-| `status` | `candidate`, `staged`, `placed`, `discarded`, or `needs-provenance`. |
-| `section` | Asset repo section, such as `water-series/part-09` or `standalone/<article>`. |
-| `target` | `substack`, `carousel`, `linkedin-post`, or another placement target. |
-| `figureNumber` | Figure number for article placement. |
-| `draftContext` | Optional note about why the image is needed and where it belongs in the draft. |
+| `intakeSection` | Optional routing hint from intake, such as `water-series/part-09` or `standalone/<article>`. |
+| `assetPath` | Final repo-relative path after publication, when known. |
+| `rawAssetUrl` | Raw GitHub URL or other durable public asset URL, when known. |
+| `status` | `candidate`, `staged`, `publishing`, `published`, `discarded`, or `needs-provenance`. |
 
 If the pipeline cannot prove provenance, it should keep the image in
 `needs-provenance` rather than silently treating it as publishable.
+`intakeSection` is only a convenience for staging and review; `assetPath`
+supersedes it once the asset is promoted, and placement records should own
+content relationships.
+
+Placement records should carry target-specific fields:
+
+| Field | Purpose |
+|-------|---------|
+| `assetId` | Asset being placed. |
+| `contentItemId` | Published or publishable work that will contain the asset. |
+| `contentDraftId` | Draft receiving the snippet before publication, when applicable. |
+| `target` | `substack`, `carousel`, `linkedin-post`, or another placement target. |
+| `figureNumber` | Figure number for article placement. |
+| `draftLocation` | Structured draft pointer, such as file path plus line range or heading anchor. |
+| `snippet` | Target-specific generated embed or handoff text. |
+| `snippetFormat` | `html-figure`, `marp-image`, `linkedin-handoff-text`, or another explicit render format. |
+| `status` | `planned`, `publishing`, `placed`, `published`, `removed`, or `failed`. |
+
+`draftLocation` should be structured JSON rather than a loose sentence whenever
+possible. A minimal shape is `{ "path": "...", "heading": "...", "lineStart": 0,
+"lineEnd": 0 }`.
+
+Image need records should carry review-time visual gaps:
+
+| Field | Purpose |
+|-------|---------|
+| `contentDraftId` | Draft that needs a visual anchor. |
+| `draftLocation` | Structured draft pointer for the dense passage, placeholder, heading, or selected text. |
+| `reason` | Short reason, such as `dense prose`, `needs map`, `needs concept diagram`, `needs sourced photo`, or `needs table`. |
+| `neededAssetKind` | Optional hint such as `photo`, `diagram`, `map`, `table`, or `ai-image`. |
+| `status` | `open`, `resolved`, or `dismissed`. |
+| `resolvedAssetId` | Asset selected or created to satisfy the need. |
+| `resolvedPlacementId` | Placement that inserted or handed off the resolved asset. |
+| `createdAt` | When the need was recorded. |
+| `resolvedAt` | When the need was resolved or dismissed. |
 
 ## Transaction Model
 
 D1 can make the ledger transactional, but it cannot make filesystem writes, Git
 commits, table Google Sheet creation, and editor edits part of one database
-transaction. Model those steps as a saga:
+transaction. Model those steps as an idempotent saga:
 
-1. Create or update an asset record with `status = publishing`.
-2. Write or move files into a staging location.
-3. Promote accepted files into the asset repo.
-4. Write provenance files and optional `asset.json`.
-5. Commit and push final assets.
-6. Insert or replace the draft snippet.
-7. Mark the asset `placed`.
+| Step | Forward action | Idempotency key | Compensation or retry rule |
+|------|----------------|-----------------|-----------------------------|
+| 1 | Create or update an asset record with `status = publishing`. | `asset.id` or `contentHash` for local files. | Restore previous status if no external side effect has happened. |
+| 2 | Write or move files into a staging location. | Staging path derived from `asset.id`. | Delete staging files if the asset is discarded before promotion. |
+| 3 | Promote accepted files into the asset repo. | Repo-relative `assetPath`. | Re-run as overwrite-if-same-hash; otherwise stop for manual conflict review. |
+| 4 | Write provenance files and optional `asset.json`. | Repo-relative metadata paths. | Re-run as replace; provenance should be deterministic from the asset record. |
+| 5 | Commit and push final assets. | Git tree state plus commit message containing `asset.id` or slug. | Retry push if commit exists; if commit failed, re-run add/commit on the same paths. |
+| 6 | Insert or replace the draft snippet. | `asset_placement.id` and `draftLocation`. | Replace an existing generated snippet for the same placement instead of inserting a duplicate. |
+| 7 | Mark the `asset_placement` `placed` and the asset `published` when appropriate. | `asset_placement.id`. | Recompute from repo state and draft snippet if the ledger update failed after side effects. |
 
-If any step fails, keep the current step and error in D1 so the pipeline can
-retry or clean up deliberately. This is safer than scattering half-finished
-state across `~/Downloads`, `/tmp`, legacy image sheets, and the asset repo.
+Each saga record should store `current_step`, `last_error`, `retry_count`,
+`next_retry_at`, and a short `compensation` note. If any step fails, keep the
+current step and error in D1 so the pipeline can retry or clean up deliberately.
+This is safer than scattering half-finished state across `~/Downloads`, `/tmp`,
+legacy image sheets, and the asset repo.
 
 ## Review-Triggered Image Hunt
 
@@ -188,7 +245,8 @@ That should be modeled as a pipeline entry point:
 1. Capture the current draft location or selected text.
 2. Record the reason for the image need, such as `dense prose`, `needs map`,
    `needs concept diagram`, `needs sourced photo`, or `needs table`.
-3. Create a candidate image record with `draftContext`.
+3. Create an `image_need` record with `draftLocation`, `reason`, and
+   `status = open`.
 4. Let the user choose an intake path:
    - Search/source a web image and capture it directly to D1.
    - Use an existing staged image.
@@ -196,8 +254,12 @@ That should be modeled as a pipeline entry point:
    - Provide or generate an AI image.
    - Promote a nearby markdown table if the visual need is really data.
 5. Continue through normal provenance, placement, and snippet generation.
+6. Resolve the `image_need` with `resolved_asset_id`,
+   `resolved_placement_id`, and `status = resolved`.
 
 This keeps final-review image hunts from becoming an undocumented side path.
+It also lets review UI show open needs for a draft, such as three requested
+visual breaks with two already resolved.
 
 ## Downloads Handling
 
@@ -206,15 +268,18 @@ This keeps final-review image hunts from becoming an undocumented side path.
 For local source files:
 
 1. Detect likely image files and sidecar metadata.
-2. Infer useful fields from the filename when possible, especially for
+2. Compute `contentHash` before moving or renaming the file.
+3. Upsert intake records by `contentHash` when available, falling back to
+   source URL or filename only when there is no file content to hash.
+4. Infer useful fields from the filename when possible, especially for
    AI-generated images with timestamped names.
-3. Ask for or record missing provenance before placement.
-4. Move the image into the asset repo at `[section]/[slug]/`.
-5. Write provenance files alongside the image:
+5. Ask for or record missing provenance before placement.
+6. Move the image into the asset repo at the final `assetPath`.
+7. Write provenance files alongside the image:
    - `url.txt`
    - `license.txt`
    - `photographer.txt`
-6. Remove or move sidecar/source files so `~/Downloads` is not left carrying
+8. Remove or move sidecar/source files so `~/Downloads` is not left carrying
    finished assets.
 
 This follows the content standard that `~/Downloads` should be empty of processed
@@ -229,7 +294,7 @@ For a publishable image, placement creates:
 - Provenance files.
 - A raw GitHub URL.
 - A target-specific snippet.
-- A D1 ledger transition to `placed`.
+- A D1 `asset_placement` transition to `placed`.
 
 For Substack body images, the snippet should be an HTML figure:
 
@@ -265,6 +330,8 @@ Current behavior:
 Architecture target:
 
 - Treat generated table screenshots as first-class assets in the same asset repo.
+- Run table screenshot promotion through the same asset saga rather than through
+  a parallel untracked path.
 - Store table provenance metadata:
   - `url.txt` = Google Sheet URL
   - `photographer.txt` = `Owen Corpening`
@@ -274,6 +341,22 @@ Architecture target:
 - Keep the accessible data link in the caption or linked figure consistently
   across article and carousel outputs.
 
+Table promotion maps onto the saga with one table-specific side effect:
+
+| Saga step | Table promotion action |
+|-----------|------------------------|
+| 1 | Create an `asset` for the table screenshot and an `asset_placement` for the draft replacement. |
+| 1.5 | Create the reader-facing Google Sheet and store its URL as provenance/source metadata. |
+| 2 | Render the markdown table as local HTML and screenshot it into staging. |
+| 3 | Promote the PNG into the asset repo at the final `assetPath`. |
+| 4 | Write `url.txt`, `photographer.txt`, `license.txt`, and optional `asset.json`. |
+| 5 | Commit and push the PNG and metadata files. |
+| 6 | Replace the markdown table with the generated figure embed. |
+| 7 | Mark the `asset_placement` `placed` and the asset `published` when the repo and draft agree. |
+
+The current table tool already performs most side effects, but wiring it to D1
+and saga retry state is a migration gap to close.
+
 ## Suggested Module Boundaries
 
 ```text
@@ -282,7 +365,7 @@ extensions/image-staging/lib/
 ├── imageIntake.js        # URL capture, Downloads, AI file, and user-provided intake
 ├── assetLedgerD1.js      # D1 asset records, state transitions, retry log
 ├── imageAssetsRepo.js    # asset repo paths, provenance files, raw URLs, git
-├── imagePipeline.js      # place/discard/orchestrate
+├── imagePipeline.js      # thin saga orchestrator and retry routing
 ├── snippetBuilder.js     # substack, carousel, linkedin-post snippets
 └── thumbResolver.js      # preview resolution
 
@@ -293,4 +376,8 @@ extensions/table-tools/lib/
 ```
 
 The goal is for VS Code views and commands to call pipeline functions instead of
-embedding workflow rules directly in UI handlers.
+embedding workflow rules directly in UI handlers. `imagePipeline.js` should stay
+thin: it calls `assetLedgerD1` for steps 1 and 7, `imageAssetsRepo` for file and
+Git side effects, and `snippetBuilder` for target-specific output. It should not
+become the home for record validation, repo path rules, thumbnail resolution, or
+provider-specific intake logic.
