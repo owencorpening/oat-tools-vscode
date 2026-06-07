@@ -1,6 +1,7 @@
 'use strict';
 const vscode = require('vscode');
 const { ImagePanelProvider } = require('./views/imagePanelProvider');
+const { registerLocalFileIntakeCommand } = require('./lib/localFileIntakeCommand');
 const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand');
 
 function activate(context) {
@@ -14,6 +15,7 @@ function activate(context) {
     vscode.commands.registerCommand('oatImages.refreshPanel', () => imagePanel.refresh())
   );
 
+  registerLocalFileIntakeCommand(context, vscode);
   registerReviewImageNeedCommand(context, vscode);
 }
 

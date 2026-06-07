@@ -34,6 +34,10 @@
       {
         "command": "oatImages.createReviewNeed",
         "title": "OAT Images: Create Review Image Need"
+      },
+      {
+        "command": "oatImages.intakeLocalFile",
+        "title": "OAT Images: Intake Local File"
       }
     ],
     "configuration": {
