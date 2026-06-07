@@ -88,6 +88,33 @@ async function testWritesToLedgerWithDb() {
   assert.deepStrictEqual(calls, [['asset', 'db-1', 'asset-db', 'candidate', 'standalone/article']]);
 }
 
+async function testWritesToLedgerWriter() {
+  const calls = [];
+  const vscode = fakeVscode({
+    inputs: [
+      'https://example.com/source',
+      '',
+      'Source Image',
+      'Owen',
+      'OAT',
+      '',
+      'standalone/article'
+    ]
+  });
+  const ledgerWriter = {
+    saveAsset: async payload => calls.push(payload)
+  };
+
+  const result = await intakeUrl({
+    vscode,
+    ledgerWriter,
+    idFactory: { assetId: () => 'asset-writer' }
+  });
+
+  assert.strictEqual(result.asset.id, 'asset-writer');
+  assert.strictEqual(calls[0].asset.intakeSection, 'standalone/article');
+}
+
 function testHelpers() {
   assert.strictEqual(displayNameFromUrl('https://example.com/images/river_map-final.png'), 'River map final');
   assert.strictEqual(isHttpUrl('https://example.com'), true);
@@ -118,6 +145,7 @@ function fakeVscode(options = {}) {
   await testCopiesJsonWithoutDb();
   await testNeedsProvenanceWhenMissingRights();
   await testWritesToLedgerWithDb();
+  await testWritesToLedgerWriter();
   testHelpers();
   console.log('urlIntakeCommand tests passed');
 })().catch(error => {

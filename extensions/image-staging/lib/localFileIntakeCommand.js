@@ -19,7 +19,7 @@ function registerLocalFileIntakeCommand(context, vscode, options = {}) {
   );
 }
 
-async function intakeLocalFile({ vscode, db, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
+async function intakeLocalFile({ vscode, db, ledgerWriter, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
   const pickedFile = await pickLocalFile(vscode);
   if (!pickedFile) return null;
 
@@ -62,7 +62,10 @@ async function intakeLocalFile({ vscode, db, assetLedger = ledger, imageIntake =
   }
   const asset = await buildAssetFromLocalFile(imageIntake, sourceKind, assetInput);
 
-  if (db) {
+  if (ledgerWriter) {
+    await ledgerWriter.saveAsset({ asset });
+    vscode.window.showInformationMessage(`OAT: Staged local asset: ${asset.displayName}.`);
+  } else if (db) {
     await assetLedger.createAsset(db, asset);
     vscode.window.showInformationMessage(`OAT: Staged local asset: ${asset.displayName}.`);
   } else {

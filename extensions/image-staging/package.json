@@ -66,6 +66,16 @@
           "type": "string",
           "default": "",
           "description": "Unsplash API Access Key for thumbnail previews."
+        },
+        "oatImages.ledgerApiUrl": {
+          "type": "string",
+          "default": "",
+          "description": "Optional HTTP API base URL for writing D1 image pipeline records."
+        },
+        "oatImages.ledgerApiToken": {
+          "type": "string",
+          "default": "",
+          "description": "Optional bearer token for oatImages.ledgerApiUrl."
         }
       }
     }

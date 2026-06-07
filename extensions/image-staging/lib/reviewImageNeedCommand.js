@@ -25,7 +25,7 @@ function registerReviewImageNeedCommand(context, vscode, options = {}) {
   );
 }
 
-async function createReviewImageNeed({ vscode, db, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
+async function createReviewImageNeed({ vscode, db, ledgerWriter, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
   const editor = vscode.window.activeTextEditor;
   if (!editor) {
     vscode.window.showWarningMessage('OAT: Open a markdown draft before creating an image need.');
@@ -49,7 +49,10 @@ async function createReviewImageNeed({ vscode, db, assetLedger = ledger, imageIn
     neededAssetKind
   });
 
-  if (db) {
+  if (ledgerWriter) {
+    await ledgerWriter.saveReviewImageNeed({ contentDraft: draft, imageNeed: need });
+    vscode.window.showInformationMessage(`OAT: Created image need: ${reason}.`);
+  } else if (db) {
     await assetLedger.createContentDraft(db, draft);
     await assetLedger.createImageNeed(db, need);
     vscode.window.showInformationMessage(`OAT: Created image need: ${reason}.`);

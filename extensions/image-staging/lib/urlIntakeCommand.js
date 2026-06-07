@@ -12,7 +12,7 @@ function registerUrlIntakeCommand(context, vscode, options = {}) {
   );
 }
 
-async function intakeUrl({ vscode, db, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
+async function intakeUrl({ vscode, db, ledgerWriter, assetLedger = ledger, imageIntake = intake, idFactory = defaultIds } = {}) {
   const url = await vscode.window.showInputBox({
     prompt: 'Source URL',
     validateInput: value => isHttpUrl(value) ? null : 'Enter an http(s) URL'
@@ -54,7 +54,10 @@ async function intakeUrl({ vscode, db, assetLedger = ledger, imageIntake = intak
     intakeSection: emptyToUndefined(intakeSection)
   });
 
-  if (db) {
+  if (ledgerWriter) {
+    await ledgerWriter.saveAsset({ asset });
+    vscode.window.showInformationMessage(`OAT: Staged URL asset: ${asset.displayName}.`);
+  } else if (db) {
     await assetLedger.createAsset(db, asset);
     vscode.window.showInformationMessage(`OAT: Staged URL asset: ${asset.displayName}.`);
   } else {

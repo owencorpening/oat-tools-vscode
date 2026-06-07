@@ -72,6 +72,28 @@ async function testWritesToLedgerWithDb() {
   assert.deepStrictEqual(calls, [['asset', 'db-1', 'asset-ai', 'Owen Corpening', 'candidate']]);
 }
 
+async function testWritesToLedgerWriter() {
+  const filePath = tempImage('image bytes');
+  const calls = [];
+  const vscode = fakeVscode({
+    filePath,
+    quickPick: 'Downloads file',
+    inputs: ['River Map', 'https://example.com/source', 'A', 'CC', 'water-series/part-09']
+  });
+  const ledgerWriter = {
+    saveAsset: async payload => calls.push(payload)
+  };
+
+  const result = await intakeLocalFile({
+    vscode,
+    ledgerWriter,
+    idFactory: { assetId: () => 'asset-writer' }
+  });
+
+  assert.strictEqual(result.asset.id, 'asset-writer');
+  assert.strictEqual(calls[0].asset.id, 'asset-writer');
+}
+
 function testHelpers() {
   assert.strictEqual(displayNameFromPath('/tmp/river_map-final.png'), 'River map final');
   assert.strictEqual(emptyToUndefined('  hello  '), 'hello');
@@ -106,6 +128,7 @@ function tempImage(contents) {
   await testBuildAssetFromLocalFile();
   await testCopiesJsonWithoutDb();
   await testWritesToLedgerWithDb();
+  await testWritesToLedgerWriter();
   testHelpers();
   console.log('localFileIntakeCommand tests passed');
 })().catch(error => {

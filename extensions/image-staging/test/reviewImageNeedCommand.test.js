@@ -90,6 +90,29 @@ async function testCreateNeedWritesToLedgerWithDb() {
   ]);
 }
 
+async function testCreateNeedWritesToLedgerWriter() {
+  const document = fakeDocument('/repo/water/part-09.md', ['# Title', 'Needs map.']);
+  const editor = fakeEditor(document, 1, 1, 'Needs map.');
+  const vscode = fakeVscode(editor, {
+    workspacePath: '/repo',
+    picks: ['needs map', 'map']
+  });
+  const calls = [];
+  const ledgerWriter = {
+    saveReviewImageNeed: async payload => calls.push(payload)
+  };
+
+  const result = await createReviewImageNeed({
+    vscode,
+    ledgerWriter,
+    idFactory: fixedIds()
+  });
+
+  assert.strictEqual(result.imageNeed.id, 'need-fixed');
+  assert.strictEqual(calls[0].contentDraft.id, 'draft-fixed');
+  assert.strictEqual(calls[0].imageNeed.reason, 'needs map');
+}
+
 function testHelpers() {
   assert.strictEqual(slugifyHeading('A Dense Section!'), 'a-dense-section');
   const document = fakeDocument('/tmp/a.md', ['# Title', 'body', '### Later Heading']);
@@ -157,6 +180,7 @@ function fakeDocument(fsPath, lines) {
   await testBuildRecordsFromEditor();
   await testCreateNeedCopiesJsonWithoutDb();
   await testCreateNeedWritesToLedgerWithDb();
+  await testCreateNeedWritesToLedgerWriter();
   testHelpers();
   console.log('reviewImageNeedCommand tests passed');
 })().catch(error => {
