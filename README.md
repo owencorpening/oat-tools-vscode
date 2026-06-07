@@ -174,7 +174,9 @@ oat-tools-vscode/
 │   ├── tool-migration-inventory.md
 │   └── use-cases.md
 ├── tools/
-│   └── blockquotes/
+│   ├── assets/
+│   ├── blockquotes/
+│   └── carousels/
 └── package.json
 ```
 

@@ -9,7 +9,9 @@ scripts.
 
 | Tool | Purpose |
 |------|---------|
+| `assets/validate-provenance.js` | Checks final asset folders for required provenance files. |
 | `blockquotes/blockquote-renderer.py` | Renders body markdown blockquotes as OAT-styled PNG assets for Substack publishing. |
+| `carousels/export-carousel.js` | Exports Marp carousel markdown to PDF with the OAT content standards theme. |
 
 ## Boundaries
 

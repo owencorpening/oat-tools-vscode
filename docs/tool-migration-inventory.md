@@ -10,6 +10,8 @@ repo, and what should not be migrated.
 | Source | Destination | Notes |
 |--------|-------------|-------|
 | `tools/blockquoteRenderer.py` | `tools/blockquotes/blockquote-renderer.py` | Productized as a reusable publishing tool with configurable asset repo, section, and slug. |
+| New tool | `tools/carousels/export-carousel.js` | Wraps Marp carousel PDF export with standard theme, output naming, local-file flag, and dry-run support. |
+| New tool | `tools/assets/validate-provenance.js` | Validates final asset folders for `url.txt`, `license.txt`, and `photographer.txt`. |
 
 ## Already Superseded Here
 
@@ -23,14 +25,21 @@ repo, and what should not be migrated.
 
 | Source | Proposed destination | Notes |
 |--------|----------------------|-------|
-| `scripts/SecureMarkdownPDF.sh` | `tools/pdf/` | Candidate if still used for publishing/export workflows. Needs dependency and safety review. |
 | `scripts/generate_chart.py` | `tools/charts/` or lab | Candidate if it is a reusable chart generator rather than one article's one-off helper. |
 | `scripts/getFiles.py` | `tools/files/` or lab | Needs purpose review before importing. |
+
+## Better Next Tool Candidates
+
+| Tool idea | Proposed destination | Notes |
+|-----------|----------------------|-------|
+| Pre-publish review checker | `tools/review/` | Automate parts of the pre-publish checklist: frontmatter, CTA block, table promotion reminders, image references, and common formatting problems. |
+| D1 asset ledger bootstrap | `tools/d1/` or platform repo | Create/migrate the first D1 schema for content, assets, placements, and pipeline states. |
 
 ## Candidate For Lab Repo
 
 | Source | Reason |
 |--------|--------|
+| `scripts/SecureMarkdownPDF.sh` | Old Mac-specific markdown-to-password-protected-PDF helper. Not central to the current publishing pipeline. Archive unless password-protected PDFs become active again. |
 | `widgets/planetary-aquifer-registry.html` | Prototype/widget, not a reusable publishing tool yet. |
 | `scripts/fred_vc_plot.py` | Research/chart exploration tied to a topic. |
 | `scripts/fred_vc_extended.py` | Research/chart exploration tied to a topic. |
