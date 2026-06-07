@@ -49,6 +49,7 @@ Endpoints:
 
 - `POST /assets` with `{ "asset": { ... } }`
 - `POST /review-image-needs` with `{ "contentDraft": { ... }, "imageNeed": { ... } }`
+- `POST /placements` with `{ "contentDraft": { ... }, "placement": { ... }, "saga": { ... } }`
 - `GET /image-needs/open`
 - `GET /assets/staged`
 

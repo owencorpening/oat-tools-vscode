@@ -22,6 +22,9 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'POST' && url.pathname === '/review-image-needs') {
       return json(await handleCreateReviewImageNeed(request, env.DB), 201);
     }
+    if (request.method === 'POST' && url.pathname === '/placements') {
+      return json(await handleCreatePlacement(request, env.DB), 201);
+    }
     if (request.method === 'GET' && url.pathname === '/image-needs/open') {
       return json({ imageNeeds: await ledger.listOpenNeeds(env.DB, { contentDraftId: url.searchParams.get('contentDraftId') || undefined }) });
     }
@@ -51,6 +54,27 @@ async function handleCreateReviewImageNeed(request, db) {
   await upsertContentDraft(db, body.contentDraft);
   const imageNeed = await ledger.createImageNeed(db, body.imageNeed);
   return { contentDraft: body.contentDraft, imageNeed };
+}
+
+async function handleCreatePlacement(request, db) {
+  const body = await readJson(request);
+  if (!body.placement) throw httpError(400, 'Missing placement');
+
+  if (body.contentDraft) {
+    await upsertContentDraft(db, body.contentDraft);
+  }
+
+  const placement = await ledger.createPlacement(db, body.placement);
+  let saga = null;
+  if (body.saga) {
+    saga = await ledger.createSaga(db, {
+      ...body.saga,
+      assetId: body.saga.assetId || body.placement.assetId,
+      assetPlacementId: body.saga.assetPlacementId || body.placement.id
+    });
+  }
+
+  return { placement, saga };
 }
 
 async function upsertContentDraft(db, draft) {
@@ -133,5 +157,6 @@ module.exports = {
   handleRequest,
   handleCreateAsset,
   handleCreateReviewImageNeed,
+  handleCreatePlacement,
   upsertContentDraft
 };

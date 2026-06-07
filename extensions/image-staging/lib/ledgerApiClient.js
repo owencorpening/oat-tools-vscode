@@ -22,6 +22,13 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         body: payload
       });
     },
+    savePlacement(payload) {
+      return request(`${normalizedBase}/placements`, {
+        method: 'POST',
+        token,
+        body: payload
+      });
+    },
     listOpenNeeds({ contentDraftId } = {}) {
       const query = contentDraftId ? `?contentDraftId=${encodeURIComponent(contentDraftId)}` : '';
       return request(`${normalizedBase}/image-needs/open${query}`, {

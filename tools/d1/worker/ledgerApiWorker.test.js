@@ -53,6 +53,41 @@ async function testCreateReviewImageNeedUpsertsDraft() {
   assert.strictEqual(env.DB.one('image_need', 'need-2').reason, 'needs map');
 }
 
+async function testCreatePlacementWithSaga() {
+  const env = { DB: new FakeD1() };
+  env.DB.insert('asset', { id: 'asset-1', status: 'staged' });
+
+  const response = await handleRequest(jsonRequest('/placements', {
+    contentDraft: {
+      id: 'draft-1',
+      draftPath: 'part-09.md',
+      title: 'Water Part IX'
+    },
+    placement: {
+      id: 'placement-1',
+      assetId: 'asset-1',
+      contentDraftId: 'draft-1',
+      target: 'substack',
+      figureNumber: '3',
+      snippetFormat: 'html-figure'
+    },
+    saga: {
+      id: 'saga-1',
+      imageNeedId: 'need-1'
+    }
+  }), env);
+  const body = await response.json();
+
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(body.placement.asset_id, 'asset-1');
+  assert.strictEqual(body.placement.content_draft_id, 'draft-1');
+  assert.strictEqual(body.saga.asset_id, 'asset-1');
+  assert.strictEqual(body.saga.asset_placement_id, 'placement-1');
+  assert.strictEqual(env.DB.one('content_draft', 'draft-1').title, 'Water Part IX');
+  assert.strictEqual(env.DB.one('asset_placement', 'placement-1').target, 'substack');
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').image_need_id, 'need-1');
+}
+
 async function testListRoutes() {
   const env = { DB: new FakeD1() };
   env.DB.insert('asset', { id: 'asset-1', status: 'staged', created_at: '2026-01-01T00:00:00.000Z' });
@@ -189,6 +224,7 @@ function byCreatedAt(a, b) {
 (async () => {
   await testCreateAsset();
   await testCreateReviewImageNeedUpsertsDraft();
+  await testCreatePlacementWithSaga();
   await testListRoutes();
   await testAuthAndErrors();
   console.log('ledgerApiWorker tests passed');
