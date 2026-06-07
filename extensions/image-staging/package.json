@@ -30,6 +30,10 @@
       {
         "command": "oatImages.refreshPanel",
         "title": "OAT Images: Refresh Image Panel"
+      },
+      {
+        "command": "oatImages.createReviewNeed",
+        "title": "OAT Images: Create Review Image Need"
       }
     ],
     "configuration": {
