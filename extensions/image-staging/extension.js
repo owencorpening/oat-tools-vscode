@@ -4,6 +4,7 @@ const { ImagePanelProvider } = require('./views/imagePanelProvider');
 const { registerLedgerBrowseCommands } = require('./lib/ledgerBrowseCommands');
 const { registerLocalFileIntakeCommand } = require('./lib/localFileIntakeCommand');
 const { createLedgerWriterFromSettings } = require('./lib/ledgerApiClient');
+const { registerPlannedPlacementRunCommand } = require('./lib/plannedPlacementRunCommand');
 const { registerReviewImageNeedCommand } = require('./lib/reviewImageNeedCommand');
 const { registerUrlIntakeCommand } = require('./lib/urlIntakeCommand');
 
@@ -23,6 +24,7 @@ function activate(context) {
   registerReviewImageNeedCommand(context, vscode, { ledgerWriter });
   registerUrlIntakeCommand(context, vscode, { ledgerWriter });
   registerLedgerBrowseCommands(context, vscode, { ledgerWriter });
+  registerPlannedPlacementRunCommand(context, vscode, { ledgerWriter });
 }
 
 function deactivate() {}

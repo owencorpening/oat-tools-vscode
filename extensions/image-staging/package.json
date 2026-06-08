@@ -54,6 +54,10 @@
       {
         "command": "oatImages.listPlannedPlacements",
         "title": "OAT Images: List Planned D1 Placements"
+      },
+      {
+        "command": "oatImages.preparePlannedPlacementRun",
+        "title": "OAT Images: Prepare Planned Placement Run"
       }
     ],
     "configuration": {
