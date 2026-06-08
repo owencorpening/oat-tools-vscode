@@ -48,6 +48,53 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         method: 'GET',
         token
       });
+    },
+    markSagaStep(db, sagaId, updates) {
+      return request(`${normalizedBase}/sagas/${encodeURIComponent(sagaId)}/step`, {
+        method: 'POST',
+        token,
+        body: updates
+      });
+    },
+    markAssetPublishing(db, assetId) {
+      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/publishing`, {
+        method: 'POST',
+        token
+      });
+    },
+    markPlacementPublishing(db, placementId) {
+      return request(`${normalizedBase}/placements/${encodeURIComponent(placementId)}/publishing`, {
+        method: 'POST',
+        token
+      });
+    },
+    updateAssetPublication(db, { assetId, assetPath, rawAssetUrl } = {}) {
+      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/publication`, {
+        method: 'POST',
+        token,
+        body: { assetPath, rawAssetUrl }
+      });
+    },
+    updatePlacementSnippet(db, { placementId, snippet, snippetFormat } = {}) {
+      return request(`${normalizedBase}/placements/${encodeURIComponent(placementId)}/snippet`, {
+        method: 'POST',
+        token,
+        body: { snippet, snippetFormat }
+      });
+    },
+    markPlaced(db, { placementId, assetId, publishedUrl } = {}) {
+      return request(`${normalizedBase}/placements/${encodeURIComponent(placementId)}/placed`, {
+        method: 'POST',
+        token,
+        body: { assetId, publishedUrl }
+      });
+    },
+    markFailed(db, { sagaId, error, resolution, nextRetryAt } = {}) {
+      return request(`${normalizedBase}/sagas/${encodeURIComponent(sagaId)}/failed`, {
+        method: 'POST',
+        token,
+        body: { error: messageFor(error), resolution, nextRetryAt }
+      });
     }
   };
 }
@@ -107,8 +154,14 @@ function parseResponseBody(data) {
   }
 }
 
+function messageFor(error) {
+  if (!error) return null;
+  return error instanceof Error ? error.message : String(error);
+}
+
 module.exports = {
   createLedgerApiClient,
   createLedgerWriterFromSettings,
-  requestJson
+  requestJson,
+  messageFor
 };

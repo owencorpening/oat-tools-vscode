@@ -58,6 +58,10 @@
       {
         "command": "oatImages.preparePlannedPlacementRun",
         "title": "OAT Images: Prepare Planned Placement Run"
+      },
+      {
+        "command": "oatImages.executePlannedPlacementRun",
+        "title": "OAT Images: Execute Planned Placement Run"
       }
     ],
     "configuration": {

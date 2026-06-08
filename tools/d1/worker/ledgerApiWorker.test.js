@@ -107,6 +107,70 @@ async function testListRoutes() {
   assert.strictEqual(placements.placements[0].saga_id, 'saga-1');
 }
 
+async function testPlacementLifecycleRoutes() {
+  const env = { DB: new FakeD1() };
+  env.DB.insert('asset', { id: 'asset-1', status: 'staged' });
+  env.DB.insert('asset_placement', { id: 'placement-1', asset_id: 'asset-1', status: 'planned' });
+  env.DB.insert('asset_saga', {
+    id: 'saga-1',
+    asset_id: 'asset-1',
+    asset_placement_id: 'placement-1',
+    status: 'running',
+    current_step: 1,
+    resolution: 'auto-retry',
+    retry_count: 0
+  });
+
+  let response = await handleRequest(jsonRequest('/sagas/saga-1/step', {
+    currentStep: 2,
+    status: 'running',
+    resolution: 'auto-retry',
+    compensation: 'retry download'
+  }), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').current_step, 2);
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').compensation, 'retry download');
+
+  response = await handleRequest(jsonRequest('/assets/asset-1/publishing', {}), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset', 'asset-1').status, 'publishing');
+
+  response = await handleRequest(jsonRequest('/placements/placement-1/publishing', {}), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset_placement', 'placement-1').status, 'publishing');
+
+  response = await handleRequest(jsonRequest('/assets/asset-1/publication', {
+    assetPath: 'water-series/part-09/river-map',
+    rawAssetUrl: 'https://raw.example.com/river-map.jpg'
+  }), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset', 'asset-1').asset_path, 'water-series/part-09/river-map');
+
+  response = await handleRequest(jsonRequest('/placements/placement-1/snippet', {
+    snippet: '<figure></figure>',
+    snippetFormat: 'html-figure'
+  }), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset_placement', 'placement-1').snippet_format, 'html-figure');
+
+  response = await handleRequest(jsonRequest('/placements/placement-1/placed', {
+    assetId: 'asset-1',
+    publishedUrl: 'https://raw.example.com/river-map.jpg'
+  }), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset_placement', 'placement-1').status, 'placed');
+  assert.strictEqual(env.DB.one('asset', 'asset-1').status, 'published');
+
+  response = await handleRequest(jsonRequest('/sagas/saga-1/failed', {
+    error: 'download failed',
+    resolution: 'manual-review'
+  }), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').status, 'failed');
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').last_error, 'download failed');
+  assert.strictEqual(env.DB.one('asset_saga', 'saga-1').retry_count, 1);
+}
+
 async function testAuthAndErrors() {
   let response = await handleRequest(jsonRequest('/assets', { asset: { id: 'asset-1' } }, 'wrong'), {
     DB: new FakeD1(),
@@ -189,6 +253,7 @@ class FakeStatement {
       return { success: true };
     }
     if (/^\s*INSERT\s+INTO/i.test(this.sql)) return this.runInsert();
+    if (/^\s*UPDATE\s+/i.test(this.sql)) return this.runUpdate();
     throw new Error(`Unsupported run SQL: ${this.sql}`);
   }
 
@@ -244,6 +309,40 @@ class FakeStatement {
     this.db.insert(match[1], row);
     return { success: true };
   }
+
+  runUpdate() {
+    if (/UPDATE\s+asset_saga[\s\S]+retry_count\s*=\s*retry_count\s*\+\s*1/i.test(this.sql)) {
+      const sagaId = this.values[4];
+      const row = this.db.one('asset_saga', sagaId);
+      Object.assign(row, {
+        status: 'failed',
+        resolution: this.values[0],
+        last_error: this.values[1],
+        retry_count: (row.retry_count || 0) + 1,
+        next_retry_at: this.values[2],
+        updated_at: this.values[3]
+      });
+      return { success: true };
+    }
+
+    const match = this.sql.match(/UPDATE\s+(\w+)\s+SET\s+([\s\S]+?)\s+WHERE\s+id\s*=\s*\?/i);
+    assert(match, `unparsed update: ${this.sql}`);
+    const table = match[1];
+    const assignments = match[2]
+      .split(',')
+      .map(part => part.trim())
+      .filter(Boolean);
+    const id = this.values[assignments.length];
+    const row = this.db.one(table, id);
+
+    assignments.forEach((assignment, index) => {
+      const column = assignment.split('=')[0].trim();
+      const literal = assignment.match(/=\s*'([^']*)'/);
+      row[column] = literal ? literal[1] : this.values[index];
+    });
+
+    return { success: true };
+  }
 }
 
 function byCreatedAt(a, b) {
@@ -255,6 +354,7 @@ function byCreatedAt(a, b) {
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();
+  await testPlacementLifecycleRoutes();
   await testAuthAndErrors();
   console.log('ledgerApiWorker tests passed');
 })().catch(error => {

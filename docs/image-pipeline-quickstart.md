@@ -6,8 +6,9 @@ placement.
 The image notebook is where the tool tracks possible images, why you need them,
 where they should go, and what should happen next.
 
-Current limit: today this flow prepares placement instructions. It does not yet
-move files, edit your draft, commit to Git, or mark the image fully placed.
+Current side-effect boundary: copying placement instructions is still available
+as a dry handoff. The guarded execute command asks before it moves files, edits
+your draft, commits and pushes Git changes, or marks the image fully placed.
 
 ## Setup
 
@@ -28,7 +29,7 @@ flowchart LR
   C --> D[Create planned placement]
   D --> E[List planned placements]
   E --> F[Copy placement instructions]
-  F --> G[Later: place image in draft and repo]
+  F --> G[Execute planned placement]
 ```
 
 ## Seven Frames
@@ -74,12 +75,13 @@ The copied instructions are for the next automation step. They include:
 - which planned placement should be updated
 - whether the automation should download and commit the image
 
-Frame 7: Stop before side effects.
+Frame 7: Execute when ready.
 
-This is the current safe stopping point. The next implementation step is a
-guarded local command that consumes the placement instructions, writes asset
-files, commits and pushes them, inserts or replaces the draft snippet, and marks
-the placement as done.
+The safe stopping point is the copied JSON from `Prepare Planned Placement Run`.
+When you are ready for local side effects, run
+`OAT Images: Execute Planned Placement Run`. It confirms before writing asset
+files, committing and pushing them, inserting or replacing the draft snippet, and
+marking the placement as done.
 
 ## Most Common Path
 
@@ -87,7 +89,8 @@ the placement as done.
 2. Open `OAT Image Staging`.
 3. Click `Place` on the staged image.
 4. Run `OAT Images: Prepare Planned Placement Run`.
-5. Keep the copied placement instructions for the next automation step.
+5. Run `OAT Images: Execute Planned Placement Run` when the draft is open and
+   you are ready to write files and update the ledger.
 
 ## Command Cheat Sheet
 
@@ -101,6 +104,7 @@ the placement as done.
 | See staged images | `OAT Images: List Staged Notebook Images` |
 | See planned placements | `OAT Images: List Planned Image Placements` |
 | Copy placement instructions | `OAT Images: Prepare Planned Placement Run` |
+| Place image locally | `OAT Images: Execute Planned Placement Run` |
 
 ## If Something Feels Off
 
@@ -118,7 +122,8 @@ the placement as done.
 - The publishing ledger is backed by Cloudflare D1 in this stack.
 - The notebook service is the ledger Worker.
 - Placement instructions are JSON shaped for `imagePipeline.placeAsset`.
-- The final placement automation is still the next thing to build.
+- The execute command runs `imagePipeline.placeAsset` through the ledger Worker
+  lifecycle endpoints.
 
 ## Where To Read More
 

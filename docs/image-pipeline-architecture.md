@@ -151,12 +151,13 @@ Fresh-start baby steps implemented in this repo:
    Placement Run` copies placement instructions instead of silently touching the
    asset repo, Git, or the active draft.
 
+8. Added `OAT Images: Execute Planned Placement Run`, a guarded local command
+   that calls `imagePipeline.placeAsset`, writes or replaces the draft snippet,
+   and updates saga state through Worker-backed ledger lifecycle endpoints.
+
 Remaining implementation gap:
 
-- Turn the prepared placement instructions into a guarded local execution command that calls
-  `imagePipeline.placeAsset`, writes or replaces the draft snippet, and updates
-  saga state through a local or Worker-backed ledger adapter.
-- After image placement works end to end, route table screenshots through the
+- After image placement works end to end in daily use, route table screenshots through the
   same asset saga and shared asset repo utilities.
 
 Keep Git for:

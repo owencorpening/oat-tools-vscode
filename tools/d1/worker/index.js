@@ -25,6 +25,34 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'POST' && url.pathname === '/placements') {
       return json(await handleCreatePlacement(request, env.DB), 201);
     }
+    const sagaStepMatch = url.pathname.match(/^\/sagas\/([^/]+)\/step$/);
+    if (request.method === 'POST' && sagaStepMatch) {
+      return json(await handleMarkSagaStep(request, env.DB, sagaStepMatch[1]));
+    }
+    const sagaFailedMatch = url.pathname.match(/^\/sagas\/([^/]+)\/failed$/);
+    if (request.method === 'POST' && sagaFailedMatch) {
+      return json(await handleMarkFailed(request, env.DB, sagaFailedMatch[1]));
+    }
+    const assetPublishingMatch = url.pathname.match(/^\/assets\/([^/]+)\/publishing$/);
+    if (request.method === 'POST' && assetPublishingMatch) {
+      return json(await handleMarkAssetPublishing(env.DB, assetPublishingMatch[1]));
+    }
+    const assetPublicationMatch = url.pathname.match(/^\/assets\/([^/]+)\/publication$/);
+    if (request.method === 'POST' && assetPublicationMatch) {
+      return json(await handleUpdateAssetPublication(request, env.DB, assetPublicationMatch[1]));
+    }
+    const placementPublishingMatch = url.pathname.match(/^\/placements\/([^/]+)\/publishing$/);
+    if (request.method === 'POST' && placementPublishingMatch) {
+      return json(await handleMarkPlacementPublishing(env.DB, placementPublishingMatch[1]));
+    }
+    const placementSnippetMatch = url.pathname.match(/^\/placements\/([^/]+)\/snippet$/);
+    if (request.method === 'POST' && placementSnippetMatch) {
+      return json(await handleUpdatePlacementSnippet(request, env.DB, placementSnippetMatch[1]));
+    }
+    const placementPlacedMatch = url.pathname.match(/^\/placements\/([^/]+)\/placed$/);
+    if (request.method === 'POST' && placementPlacedMatch) {
+      return json(await handleMarkPlaced(request, env.DB, placementPlacedMatch[1]));
+    }
     if (request.method === 'GET' && url.pathname === '/image-needs/open') {
       return json({ imageNeeds: await ledger.listOpenNeeds(env.DB, { contentDraftId: url.searchParams.get('contentDraftId') || undefined }) });
     }
@@ -40,6 +68,63 @@ async function handleRequest(request, env = {}) {
     const status = error.status || 500;
     return json({ error: error.message }, status);
   }
+}
+
+async function handleMarkSagaStep(request, db, sagaId) {
+  const body = await readJson(request);
+  await ledger.markSagaStep(db, decodeURIComponent(sagaId), body || {});
+  return { sagaId: decodeURIComponent(sagaId), ok: true };
+}
+
+async function handleMarkFailed(request, db, sagaId) {
+  const body = await readJson(request);
+  await ledger.markFailed(db, {
+    sagaId: decodeURIComponent(sagaId),
+    error: body && body.error,
+    resolution: body && body.resolution,
+    nextRetryAt: body && body.nextRetryAt
+  });
+  return { sagaId: decodeURIComponent(sagaId), ok: true };
+}
+
+async function handleMarkAssetPublishing(db, assetId) {
+  await ledger.markAssetPublishing(db, decodeURIComponent(assetId));
+  return { assetId: decodeURIComponent(assetId), ok: true };
+}
+
+async function handleUpdateAssetPublication(request, db, assetId) {
+  const body = await readJson(request);
+  await ledger.updateAssetPublication(db, {
+    assetId: decodeURIComponent(assetId),
+    assetPath: body && body.assetPath,
+    rawAssetUrl: body && body.rawAssetUrl
+  });
+  return { assetId: decodeURIComponent(assetId), ok: true };
+}
+
+async function handleMarkPlacementPublishing(db, placementId) {
+  await ledger.markPlacementPublishing(db, decodeURIComponent(placementId));
+  return { placementId: decodeURIComponent(placementId), ok: true };
+}
+
+async function handleUpdatePlacementSnippet(request, db, placementId) {
+  const body = await readJson(request);
+  await ledger.updatePlacementSnippet(db, {
+    placementId: decodeURIComponent(placementId),
+    snippet: body && body.snippet,
+    snippetFormat: body && body.snippetFormat
+  });
+  return { placementId: decodeURIComponent(placementId), ok: true };
+}
+
+async function handleMarkPlaced(request, db, placementId) {
+  const body = await readJson(request);
+  await ledger.markPlaced(db, {
+    placementId: decodeURIComponent(placementId),
+    assetId: body && body.assetId,
+    publishedUrl: body && body.publishedUrl
+  });
+  return { placementId: decodeURIComponent(placementId), ok: true };
 }
 
 async function handleCreateAsset(request, db) {
@@ -161,5 +246,12 @@ module.exports = {
   handleCreateAsset,
   handleCreateReviewImageNeed,
   handleCreatePlacement,
+  handleMarkSagaStep,
+  handleMarkFailed,
+  handleMarkAssetPublishing,
+  handleUpdateAssetPublication,
+  handleMarkPlacementPublishing,
+  handleUpdatePlacementSnippet,
+  handleMarkPlaced,
   upsertContentDraft
 };

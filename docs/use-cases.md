@@ -154,6 +154,8 @@ Steps:
 9. Run `OAT Images: Prepare Planned Placement Run` and select the planned
    placement.
 10. Review the copied placement instructions.
+11. Run `OAT Images: Execute Planned Placement Run` when the draft is open and
+    you are ready for local side effects.
 
 What the tool does:
 
@@ -166,12 +168,14 @@ What the tool does:
 - Lists planned placements through `OAT Images: List Planned Image Placements`.
 - Copies placement instructions through `OAT Images: Prepare Planned Placement
   Run`.
+- Executes a guarded local placement through `OAT Images: Execute Planned
+  Placement Run`.
 
 Result:
 
-The ledger knows which asset should go where and has a saga ready to execute.
-The current command stops before writing files, committing Git changes, or
-editing the draft.
+The ledger knows which asset should go where. The prepare command can stop
+before side effects, and the execute command can write the asset files, commit
+and push them, edit the draft, and mark the placement done.
 
 ## Use Case: Prepare a LinkedIn Image Handoff
 
@@ -184,9 +188,9 @@ Steps:
 2. Click `Place` on the staged image.
 3. Choose `linkedin-post`.
 4. Enter the handoff label.
-5. Run `OAT Images: Prepare Planned Placement Run`.
-6. Use the copied placement instructions as the input for the local placement
-   saga once the guarded executor is wired.
+5. Run `OAT Images: Prepare Planned Placement Run` if you want a dry handoff.
+6. Run `OAT Images: Execute Planned Placement Run` when you are ready to host
+   the image and copy or insert the handoff text.
 
 Result:
 
@@ -243,6 +247,7 @@ Use these commands when `oatImages.ledgerApiUrl` points at the ledger Worker:
 - `OAT Images: List Staged Notebook Images`
 - `OAT Images: List Planned Image Placements`
 - `OAT Images: Prepare Planned Placement Run`
+- `OAT Images: Execute Planned Placement Run`
 
 The prepare command copies placement instructions. It does not yet execute the
 file, Git, or editor side effects.

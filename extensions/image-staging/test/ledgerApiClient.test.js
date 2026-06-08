@@ -20,6 +20,29 @@ async function testClientPostsExpectedPayloads() {
   await client.listOpenNeeds({ contentDraftId: 'draft-1' });
   await client.listStagedAssets();
   await client.listPlannedPlacements({ contentDraftId: 'draft-1' });
+  await client.markSagaStep({}, 'saga-1', { currentStep: 2, status: 'running' });
+  await client.markAssetPublishing({}, 'asset-1');
+  await client.markPlacementPublishing({}, 'placement-1');
+  await client.updateAssetPublication({}, {
+    assetId: 'asset-1',
+    assetPath: 'water-series/part-09/river-map',
+    rawAssetUrl: 'https://raw.example.com/river-map.jpg'
+  });
+  await client.updatePlacementSnippet({}, {
+    placementId: 'placement-1',
+    snippet: '<figure></figure>',
+    snippetFormat: 'html-figure'
+  });
+  await client.markPlaced({}, {
+    placementId: 'placement-1',
+    assetId: 'asset-1',
+    publishedUrl: 'https://raw.example.com/river-map.jpg'
+  });
+  await client.markFailed({}, {
+    sagaId: 'saga-1',
+    error: new Error('download failed'),
+    resolution: 'manual-review'
+  });
 
   assert.strictEqual(calls[0][0], 'https://ledger.example.com/api/review-image-needs');
   assert.strictEqual(calls[0][1].method, 'POST');
@@ -36,6 +59,18 @@ async function testClientPostsExpectedPayloads() {
   assert.strictEqual(calls[4][1].method, 'GET');
   assert.strictEqual(calls[5][0], 'https://ledger.example.com/api/placements/planned?contentDraftId=draft-1');
   assert.strictEqual(calls[5][1].method, 'GET');
+  assert.strictEqual(calls[6][0], 'https://ledger.example.com/api/sagas/saga-1/step');
+  assert.deepStrictEqual(calls[6][1].body, { currentStep: 2, status: 'running' });
+  assert.strictEqual(calls[7][0], 'https://ledger.example.com/api/assets/asset-1/publishing');
+  assert.strictEqual(calls[8][0], 'https://ledger.example.com/api/placements/placement-1/publishing');
+  assert.strictEqual(calls[9][0], 'https://ledger.example.com/api/assets/asset-1/publication');
+  assert.strictEqual(calls[9][1].body.assetPath, 'water-series/part-09/river-map');
+  assert.strictEqual(calls[10][0], 'https://ledger.example.com/api/placements/placement-1/snippet');
+  assert.strictEqual(calls[10][1].body.snippetFormat, 'html-figure');
+  assert.strictEqual(calls[11][0], 'https://ledger.example.com/api/placements/placement-1/placed');
+  assert.strictEqual(calls[11][1].body.assetId, 'asset-1');
+  assert.strictEqual(calls[12][0], 'https://ledger.example.com/api/sagas/saga-1/failed');
+  assert.strictEqual(calls[12][1].body.error, 'download failed');
 }
 
 function testSettingsFactory() {
@@ -50,6 +85,8 @@ function testSettingsFactory() {
   assert.strictEqual(typeof client.savePlacement, 'function');
   assert.strictEqual(typeof client.listOpenNeeds, 'function');
   assert.strictEqual(typeof client.listPlannedPlacements, 'function');
+  assert.strictEqual(typeof client.markPlaced, 'function');
+  assert.strictEqual(typeof client.markFailed, 'function');
 }
 
 function fakeVscode(settings) {
