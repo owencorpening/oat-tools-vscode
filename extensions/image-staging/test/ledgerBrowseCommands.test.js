@@ -4,8 +4,10 @@ const assert = require('assert');
 const {
   listOpenNeeds,
   listStagedAssets,
+  listPlannedPlacements,
   needItem,
-  assetItem
+  assetItem,
+  placementItem
 } = require('../lib/ledgerBrowseCommands');
 
 async function testListOpenNeedsCopiesSelection() {
@@ -42,6 +44,31 @@ async function testListStagedAssetsCopiesSelection() {
   assert.strictEqual(JSON.parse(copied[0]).display_name, 'River Map');
 }
 
+async function testListPlannedPlacementsCopiesSelection() {
+  const copied = [];
+  const vscode = fakeVscode({ copied, pickIndex: 0 });
+  const ledgerWriter = {
+    listPlannedPlacements: async () => ({
+      placements: [
+        {
+          placement_id: 'placement-1',
+          asset_id: 'asset-1',
+          display_name: 'River Map',
+          target: 'substack',
+          figure_number: '3',
+          draft_path: 'part-09.md',
+          saga_status: 'running'
+        }
+      ]
+    })
+  };
+
+  const result = await listPlannedPlacements({ vscode, ledgerWriter });
+
+  assert.strictEqual(result.placement_id, 'placement-1');
+  assert.strictEqual(JSON.parse(copied[0]).display_name, 'River Map');
+}
+
 async function testWarningsAndEmptyStates() {
   const messages = [];
   assert.strictEqual(await listOpenNeeds({ vscode: fakeVscode({ messages }) }), null);
@@ -52,6 +79,12 @@ async function testWarningsAndEmptyStates() {
     ledgerWriter: { listStagedAssets: async () => ({ assets: [] }) }
   });
   assert.deepStrictEqual(empty, []);
+
+  const noPlacements = await listPlannedPlacements({
+    vscode: fakeVscode({ messages }),
+    ledgerWriter: { listPlannedPlacements: async () => ({ placements: [] }) }
+  });
+  assert.deepStrictEqual(noPlacements, []);
 }
 
 function testItems() {
@@ -62,6 +95,28 @@ function testItems() {
     record: { id: 'n1', reason: 'dense prose', needed_asset_kind: 'diagram', content_draft_id: 'd1' }
   });
   assert.strictEqual(assetItem({ id: 'a1', display_name: 'Map', status: 'staged' }).label, 'Map');
+  assert.deepStrictEqual(placementItem({
+    placement_id: 'p1',
+    asset_id: 'a1',
+    display_name: 'Map',
+    target: 'substack',
+    figure_number: '4',
+    draft_path: 'part-09.md',
+    saga_status: 'running'
+  }), {
+    label: 'Map',
+    description: 'substack · Figure 4',
+    detail: 'part-09.md · saga: running · p1',
+    record: {
+      placement_id: 'p1',
+      asset_id: 'a1',
+      display_name: 'Map',
+      target: 'substack',
+      figure_number: '4',
+      draft_path: 'part-09.md',
+      saga_status: 'running'
+    }
+  });
 }
 
 function fakeVscode(options = {}) {
@@ -83,6 +138,7 @@ function fakeVscode(options = {}) {
 (async () => {
   await testListOpenNeedsCopiesSelection();
   await testListStagedAssetsCopiesSelection();
+  await testListPlannedPlacementsCopiesSelection();
   await testWarningsAndEmptyStates();
   testItems();
   console.log('ledgerBrowseCommands tests passed');

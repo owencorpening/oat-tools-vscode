@@ -50,6 +50,10 @@
       {
         "command": "oatImages.listStagedAssets",
         "title": "OAT Images: List Staged D1 Assets"
+      },
+      {
+        "command": "oatImages.listPlannedPlacements",
+        "title": "OAT Images: List Planned D1 Placements"
       }
     ],
     "configuration": {

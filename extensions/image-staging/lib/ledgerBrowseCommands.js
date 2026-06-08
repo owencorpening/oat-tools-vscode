@@ -11,6 +11,11 @@ function registerLedgerBrowseCommands(context, vscode, options = {}) {
       listStagedAssets({ vscode, ...options })
     )
   );
+  context.subscriptions.push(
+    vscode.commands.registerCommand('oatImages.listPlannedPlacements', () =>
+      listPlannedPlacements({ vscode, ...options })
+    )
+  );
 }
 
 async function listOpenNeeds({ vscode, ledgerWriter } = {}) {
@@ -59,6 +64,29 @@ async function listStagedAssets({ vscode, ledgerWriter } = {}) {
   return picked.record;
 }
 
+async function listPlannedPlacements({ vscode, ledgerWriter } = {}) {
+  if (!ledgerWriter || !ledgerWriter.listPlannedPlacements) {
+    vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl to list D1 planned placements.');
+    return null;
+  }
+
+  const result = await ledgerWriter.listPlannedPlacements();
+  const placements = result.placements || [];
+  if (placements.length === 0) {
+    vscode.window.showInformationMessage('OAT: No planned D1 placements.');
+    return [];
+  }
+
+  const picked = await vscode.window.showQuickPick(placements.map(placementItem), {
+    placeHolder: 'Planned D1 placements'
+  });
+  if (!picked) return placements;
+
+  await vscode.env.clipboard.writeText(JSON.stringify(picked.record, null, 2));
+  vscode.window.showInformationMessage('OAT: Planned placement copied as JSON.');
+  return picked.record;
+}
+
 function needItem(record) {
   const detail = [record.needed_asset_kind, record.content_draft_id].filter(Boolean).join(' · ');
   return {
@@ -80,10 +108,31 @@ function assetItem(record) {
   };
 }
 
+function placementItem(record) {
+  const label = record.display_name || record.slug || record.asset_id || record.placement_id;
+  const description = [record.target, record.figure_number ? `Figure ${record.figure_number}` : null]
+    .filter(Boolean)
+    .join(' · ');
+  const detail = [
+    record.draft_path || record.content_draft_id,
+    record.saga_status ? `saga: ${record.saga_status}` : null,
+    record.placement_id
+  ].filter(Boolean).join(' · ');
+
+  return {
+    label,
+    description,
+    detail,
+    record
+  };
+}
+
 module.exports = {
   registerLedgerBrowseCommands,
   listOpenNeeds,
   listStagedAssets,
+  listPlannedPlacements,
   needItem,
-  assetItem
+  assetItem,
+  placementItem
 };
