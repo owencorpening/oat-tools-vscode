@@ -14,9 +14,9 @@ const fakeVscode = {
       infoMessages.push(message);
       return message;
     },
-    showWarningMessage: async message => {
+    showWarningMessage: async (message, options, ...choices) => {
       warningMessages.push(message);
-      return message;
+      return choices.includes('Discard') ? 'Discard' : message;
     },
     showQuickPick: async () => quickPickValues.shift(),
     showInputBox: async () => inputBoxValues.shift()
@@ -85,12 +85,12 @@ async function testD1ActionsAreGuarded() {
   });
 
   await provider._handlePlace({ source: 'd1' });
-  await provider._handleDiscard({ source: 'd1' });
+  await provider._handleDiscard({ source: 'd1', id: 'asset-1' });
 
-  assert.strictEqual(warningMessages.length, 1);
+  assert.strictEqual(warningMessages.length, 2);
   assert.match(warningMessages[0], /Open the target markdown draft/);
-  assert.strictEqual(infoMessages.length, 1);
-  assert.match(infoMessages[0], /Notebook discard is not wired/);
+  assert.match(warningMessages[1], /Set oatImages\.ledgerApiUrl/);
+  assert.strictEqual(infoMessages.length, 0);
 }
 
 async function testD1PlaceCreatesPlannedPlacement() {
@@ -141,6 +141,32 @@ async function testD1PlaceCreatesPlannedPlacement() {
   fakeVscode.window.activeTextEditor = null;
 }
 
+async function testD1DiscardMarksAssetDiscarded() {
+  infoMessages.length = 0;
+  warningMessages.length = 0;
+
+  const calls = [];
+  const sent = [];
+  const provider = new ImagePanelProvider({ subscriptions: [] }, {
+    ledgerWriter: {
+      discardAsset: async assetId => calls.push(assetId),
+      listStagedAssets: async () => ({ assets: [] })
+    }
+  });
+  provider._view = { webview: { postMessage: message => sent.push(message) } };
+
+  const result = await provider._handleDiscard({
+    source: 'd1',
+    id: 'asset-1',
+    displayName: 'River Map'
+  });
+
+  assert.deepStrictEqual(calls, ['asset-1']);
+  assert.deepStrictEqual(result, { assetId: 'asset-1' });
+  assert.match(infoMessages.at(-1), /Image discarded/);
+  assert.strictEqual(sent.at(-1).type, 'staged');
+}
+
 function fakeEditor() {
   const lines = [
     '# Water Part IX',
@@ -171,6 +197,7 @@ async function run() {
   await testLoadsD1StagedAssets();
   await testD1ActionsAreGuarded();
   await testD1PlaceCreatesPlannedPlacement();
+  await testD1DiscardMarksAssetDiscarded();
   console.log('imagePanelProvider tests passed');
 }
 

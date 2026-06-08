@@ -67,36 +67,22 @@ Commands:
 - `OAT Images: Prepare Planned Placement Run`
 
 The panel reads staged assets from the image ledger Worker when
-`oatImages.ledgerApiUrl` is configured. Without that setting, it falls back to
-the Google Sheet set in `oatImages.sheetId` and shows rows where column H is
-`staged`.
+`oatImages.ledgerApiUrl` is configured. The image pipeline is clean-slate D1;
+it does not use Google Sheets for staging, placement, or discard state.
 
 In this stack, the image ledger is backed by Cloudflare D1. Ledger-native image
 work can intake URL/local assets, create review image needs, plan placements,
-list planned placements, and prepare placement instructions. The final guarded
-command that executes file, Git, and editor side effects is still the remaining
-implementation gap.
-
-The legacy sheet-backed panel can:
-
-1. Resolve thumbnails from `image_src`, direct image URLs, Unsplash, or page metadata
-2. Place images into the local images repo
-3. Insert Substack and carousel snippets into the active editor
-4. Copy LinkedIn image handoff text to the clipboard
-5. Mark rows as `placed` or `discarded` in the staging sheet
+list planned placements, prepare placement instructions, execute guarded local
+placement, and mark staged assets discarded.
 
 Settings:
 
 | VS Code setting | Required | Description |
 |-----------------|----------|-------------|
-| `oatImages.sheetId` | No | Google Sheet ID for image staging |
+| `oatImages.ledgerApiUrl` | Yes | D1 ledger Worker API URL |
+| `oatImages.ledgerApiToken` | No | Bearer token for the D1 ledger Worker |
 | `oatImages.imagesRepoPath` | No | Local images repo. Defaults to `~/dev/images` |
-| `oatImages.serviceAccountPath` | No | Google service account JSON path |
 | `oatImages.unsplashAccessKey` | No | Unsplash API key for thumbnail previews |
-
-For transition, Image Staging also reads the old `oat.*` setting names as fallbacks.
-If `oatImages.serviceAccountPath` is not set, it checks for
-`credentials/service-account.json` in the extension and then in the monorepo root.
 
 ---
 
@@ -200,4 +186,5 @@ The extensions use only Node.js built-ins and the VS Code API. No `npm install`
 is required for extension runtime code.
 
 External workflow dependencies still apply: `git`, `bash`, a screenshot script
-and browser setup, `wrangler` for Worker deployment, and Google credentials.
+and browser setup, `wrangler` for Worker deployment, and Google credentials for
+table promotion.

@@ -18,8 +18,8 @@ End with two independent VS Code extensions:
    - Promotes markdown tables into styled Google Sheets and PNG figure embeds.
    - Owns the Cloudflare Worker and table screenshot pipeline.
 2. `OAT Image Staging`
-   - Shows staged image rows from the image staging sheet.
-   - Places, discards, and tracks publishing images.
+   - Shows staged image records from the D1 publishing ledger.
+   - Plans, discards, and tracks publishing images.
 
 Both extensions should be installable side by side without command, setting, or
 view ID collisions.
@@ -81,19 +81,17 @@ Files owned by `extensions/image-staging/`:
 
 - `extensions/image-staging/views/imagePanelProvider.js`
 - `extensions/image-staging/media/camera.svg`
-- `extensions/image-staging/lib/imageStagingSheet.js`
-- `extensions/image-staging/lib/imageWorkflow.js`
-- `extensions/image-staging/lib/serviceAccountAuth.js`
-- `extensions/image-staging/lib/thumbResolver.js`
+- `extensions/image-staging/lib/assetLedgerD1.js`
+- `extensions/image-staging/lib/imagePipeline.js`
+- `extensions/image-staging/lib/ledgerApiClient.js`
+- `extensions/image-staging/lib/plannedPlacementRun.js`
 - `extensions/image-staging/lib/request.js`
-- `credentials/service-account.json` remains ignored at the monorepo root for local development
-- image staging sheet setup helpers
 
 Settings renamed:
 
-- `oat.imageStagingSheetId` -> `oatImages.sheetId`
 - `oat.unsplashAccessKey` -> `oatImages.unsplashAccessKey`
 - `oat.imagesRepoPath` -> `oatImages.imagesRepoPath`
+- `oatImages.ledgerApiUrl` is the required image ledger setting.
 
 Command/view IDs renamed:
 
@@ -127,16 +125,16 @@ Automated tests should stay focused on pure logic:
 - Add tests when moving or extracting descriptor, path, or snippet generation.
 - Avoid mocking the full VS Code host unless a regression makes it worthwhile.
 
-Manual smoke tests are more valuable for the VS Code, Google, screenshot, and Git
+Manual smoke tests are more valuable for the VS Code, D1, screenshot, and Git
 integration paths:
 
 - Table Tools command appears in the Command Palette.
 - Table Tools rejects non-markdown editors.
 - Table Tools promotes a sample markdown table end to end.
 - Image Staging activity bar icon appears.
-- Image Staging panel loads staged rows.
+- Image Staging panel loads staged D1 records.
 - Place creates the expected image repo files and snippet.
-- Discard marks the sheet row and handles placed images as expected.
+- Discard marks the D1 asset record discarded.
 
 ## Benchmarks
 
@@ -146,9 +144,6 @@ boundaries matter more than speed.
 
 ## Open Questions
 
-- Should local credentials remain at the monorepo root, move into the Image
-  Staging extension, or always be supplied through `oatImages.serviceAccountPath`?
 - Should the hard-coded `water-series` image path become a setting during the split?
 - Should `gas/promote-tables.gs` stay with Table Tools, or be archived if the Worker
   is now the canonical table-promotion backend?
-- When can the old `oat.*` setting fallbacks be removed?

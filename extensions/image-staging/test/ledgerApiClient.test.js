@@ -28,6 +28,7 @@ async function testClientPostsExpectedPayloads() {
     assetPath: 'water-series/part-09/river-map',
     rawAssetUrl: 'https://raw.example.com/river-map.jpg'
   });
+  await client.discardAsset('asset-1');
   await client.updatePlacementSnippet({}, {
     placementId: 'placement-1',
     snippet: '<figure></figure>',
@@ -65,12 +66,14 @@ async function testClientPostsExpectedPayloads() {
   assert.strictEqual(calls[8][0], 'https://ledger.example.com/api/placements/placement-1/publishing');
   assert.strictEqual(calls[9][0], 'https://ledger.example.com/api/assets/asset-1/publication');
   assert.strictEqual(calls[9][1].body.assetPath, 'water-series/part-09/river-map');
-  assert.strictEqual(calls[10][0], 'https://ledger.example.com/api/placements/placement-1/snippet');
-  assert.strictEqual(calls[10][1].body.snippetFormat, 'html-figure');
-  assert.strictEqual(calls[11][0], 'https://ledger.example.com/api/placements/placement-1/placed');
-  assert.strictEqual(calls[11][1].body.assetId, 'asset-1');
-  assert.strictEqual(calls[12][0], 'https://ledger.example.com/api/sagas/saga-1/failed');
-  assert.strictEqual(calls[12][1].body.error, 'download failed');
+  assert.strictEqual(calls[10][0], 'https://ledger.example.com/api/assets/asset-1/discarded');
+  assert.strictEqual(calls[10][1].method, 'POST');
+  assert.strictEqual(calls[11][0], 'https://ledger.example.com/api/placements/placement-1/snippet');
+  assert.strictEqual(calls[11][1].body.snippetFormat, 'html-figure');
+  assert.strictEqual(calls[12][0], 'https://ledger.example.com/api/placements/placement-1/placed');
+  assert.strictEqual(calls[12][1].body.assetId, 'asset-1');
+  assert.strictEqual(calls[13][0], 'https://ledger.example.com/api/sagas/saga-1/failed');
+  assert.strictEqual(calls[13][1].body.error, 'download failed');
 }
 
 function testSettingsFactory() {
@@ -85,6 +88,7 @@ function testSettingsFactory() {
   assert.strictEqual(typeof client.savePlacement, 'function');
   assert.strictEqual(typeof client.listOpenNeeds, 'function');
   assert.strictEqual(typeof client.listPlannedPlacements, 'function');
+  assert.strictEqual(typeof client.discardAsset, 'function');
   assert.strictEqual(typeof client.markPlaced, 'function');
   assert.strictEqual(typeof client.markFailed, 'function');
 }

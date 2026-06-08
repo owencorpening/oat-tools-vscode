@@ -24,7 +24,7 @@ function testCreateRepoAsset() {
     rawRepo: 'assets',
     rawBranch: 'preview',
     asset: {
-      sourceUrl: 'https://docs.google.com/spreadsheets/d/abc/edit',
+      sourceUrl: 'https://example.com/source/river-map',
       photographer: 'Owen Corpening',
       license: 'OAT rights'
     }
@@ -36,7 +36,7 @@ function testCreateRepoAsset() {
     asset.rawAssetUrl,
     'https://raw.githubusercontent.com/example/assets/preview/water-series/part-09/river-map/part09-table-river-map-preview.png'
   );
-  assert.strictEqual(fs.readFileSync(path.join(asset.assetDir, 'url.txt'), 'utf8'), 'https://docs.google.com/spreadsheets/d/abc/edit');
+  assert.strictEqual(fs.readFileSync(path.join(asset.assetDir, 'url.txt'), 'utf8'), 'https://example.com/source/river-map');
   assert.strictEqual(fs.readFileSync(path.join(asset.assetDir, 'photographer.txt'), 'utf8'), 'Owen Corpening');
   assert.strictEqual(fs.readFileSync(path.join(asset.assetDir, 'license.txt'), 'utf8'), 'OAT rights');
 }

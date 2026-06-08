@@ -95,6 +95,7 @@ async function testUpdatesAndFailureState() {
     assetId: 'asset-1',
     publishedUrl: 'https://raw.example.com/river-map.jpg'
   });
+  await ledger.markAssetDiscarded(db, 'asset-1');
   await ledger.markFailed(db, {
     sagaId: 'saga-1',
     error: new Error('push failed'),
@@ -106,7 +107,7 @@ async function testUpdatesAndFailureState() {
   assert.strictEqual(db.one('asset_saga', 'saga-1').status, 'failed');
   assert.strictEqual(db.one('asset_saga', 'saga-1').retry_count, 1);
   assert.strictEqual(db.one('asset_saga', 'saga-1').last_error, 'push failed');
-  assert.strictEqual(db.one('asset', 'asset-1').status, 'published');
+  assert.strictEqual(db.one('asset', 'asset-1').status, 'discarded');
   assert.strictEqual(db.one('asset', 'asset-1').asset_path, 'water-series/part-09/river-map');
   assert.strictEqual(db.one('asset_placement', 'placement-1').status, 'placed');
   assert.strictEqual(db.one('asset_placement', 'placement-1').snippet_format, 'html-figure');

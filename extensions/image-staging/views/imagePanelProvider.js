@@ -1,10 +1,6 @@
 'use strict';
 const vscode = require('vscode');
 const crypto = require('crypto');
-const { getServiceAccountToken } = require('../lib/serviceAccountAuth');
-const { getStagedImages, updateRow } = require('../lib/imageStagingSheet');
-const { placeImage, discardPlaced } = require('../lib/imageWorkflow');
-const { resolveThumbUrl } = require('../lib/thumbResolver');
 const {
   buildContentDraftRecord,
   buildDraftLocation
@@ -52,12 +48,12 @@ class ImagePanelProvider {
   // ── Load ──────────────────────────────────────────────────────────────────
 
   async _loadStaged() {
-    if (this._ledgerWriter && this._ledgerWriter.listStagedAssets) {
-      await this._loadD1Staged();
+    if (!this._ledgerWriter || !this._ledgerWriter.listStagedAssets) {
+      this._send({ type: 'error', message: 'Set oatImages.ledgerApiUrl to load staged images from the D1 ledger.' });
       return;
     }
 
-    await this._loadSheetStaged();
+    await this._loadD1Staged();
   }
 
   async _loadD1Staged() {
@@ -71,88 +67,9 @@ class ImagePanelProvider {
     }
   }
 
-  async _loadSheetStaged() {
-    const sheetId = this._sheetId();
-    if (!sheetId) {
-      this._send({ type: 'error', message: 'Set oatImages.sheetId in VS Code settings.' });
-      return;
-    }
-    try {
-      const unsplashKey = getSetting('unsplashAccessKey', '');
-      const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
-      const images = await getStagedImages(sheetId, token);
-      await Promise.all(images.map(async img => {
-        const resolved = await resolveThumbUrl(img.imageSrc, img.url, unsplashKey);
-        img.thumbUrl = resolved.thumbUrl;
-        if (resolved.url) img.url = resolved.url;
-      }));
-      this._send({ type: 'staged', images });
-    } catch (err) {
-      this._send({ type: 'error', message: err.message });
-    }
-  }
-
   // ── Place ─────────────────────────────────────────────────────────────────
 
   async _handlePlace(image) {
-    if (image && image.source === 'd1') {
-      return this._handleD1Place(image);
-    }
-
-    const target = await vscode.window.showQuickPick(
-      ['substack', 'carousel', 'linkedin-post'],
-      { placeHolder: 'Publishing target' }
-    );
-    if (!target) return;
-
-    // Auto-detect part number from active editor file path
-    const editorPath = vscode.window.activeTextEditor?.document?.uri?.fsPath || '';
-    const partMatch  = editorPath.match(/part-(\d+)/i);
-    const detectedPart = partMatch ? partMatch[1] : '';
-
-    const partNum = await vscode.window.showInputBox({
-      prompt: 'Part number',
-      value: detectedPart,
-      validateInput: v => v && v.trim() ? null : 'Required'
-    });
-    if (!partNum) return;
-
-    // Derive slug from image camelCase name → kebab-case
-    const derivedSlug = (image.name || '')
-      .replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
-
-    const slug = await vscode.window.showInputBox({
-      prompt: 'Image slug',
-      value: derivedSlug,
-      validateInput: v => v && v.trim() ? null : 'Required'
-    });
-    if (!slug) return;
-
-    const figNum = await vscode.window.showInputBox({
-      prompt: 'Figure number',
-      validateInput: v => v && v.trim() ? null : 'Required'
-    });
-    if (!figNum) return;
-
-    await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'OAT: Placing image…' },
-      async () => {
-        await placeImage({ image, target, partNum: partNum.trim(), slug: slug.trim(), figNum: figNum.trim() });
-        const sheetId = this._sheetId();
-        const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
-        const today = new Date().toISOString().slice(0, 10);
-        await updateRow(sheetId, image.rowIndex,
-          { status: 'placed', placed_in: `part-${partNum.trim()}`, placed_date: today, target },
-          token
-        );
-      }
-    );
-
-    vscode.window.showInformationMessage(`OAT: Image placed as ${target}.`);
-    await this._loadStaged();
-  }
-
-  async _handleD1Place(image) {
     if (!this._ledgerWriter || !this._ledgerWriter.savePlacement) {
       vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before creating notebook placements.');
       return null;
@@ -209,36 +126,23 @@ class ImagePanelProvider {
   // ── Discard ───────────────────────────────────────────────────────────────
 
   async _handleDiscard(image) {
-    if (image && image.source === 'd1') {
-      vscode.window.showInformationMessage('OAT: Notebook discard is not wired yet; use the ledger API or wait for the next panel action.');
-      return;
+    if (!this._ledgerWriter || !this._ledgerWriter.discardAsset) {
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before discarding notebook images.');
+      return null;
     }
 
-    const isPlaced = image.status === 'placed';
-    const msg = isPlaced
-      ? `This image is placed in ${image.placed_in}. Remove from article and repo?`
-      : 'Discard this image? It has not been placed anywhere.';
-
-    const choice = await vscode.window.showWarningMessage(msg, { modal: true }, 'Discard');
+    const label = image.displayName || image.name || image.id || 'this image';
+    const choice = await vscode.window.showWarningMessage(`Discard ${label}?`, { modal: true }, 'Discard');
     if (choice !== 'Discard') return;
 
-    if (isPlaced) await discardPlaced(image);
-
-    const sheetId = this._sheetId();
-    const token = await getServiceAccountToken({ credentialPath: getSetting('serviceAccountPath', '') });
-    await updateRow(sheetId, image.rowIndex, { status: 'discarded' }, token);
+    await this._ledgerWriter.discardAsset(image.id);
 
     vscode.window.showInformationMessage('OAT: Image discarded.');
     await this._loadStaged();
+    return { assetId: image.id };
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
-
-  _sheetId() {
-    return process.env.OAT_IMAGE_SHEET_ID ||
-      getSetting('sheetId', '') ||
-      vscode.workspace.getConfiguration('oat').get('imageStagingSheetId', '');
-  }
 
   _send(msg) {
     if (this._view) this._view.webview.postMessage(msg);

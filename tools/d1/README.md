@@ -2,9 +2,8 @@
 
 Fresh-start D1 schema for the image and table asset pipeline.
 
-This intentionally does not migrate the legacy image staging sheet. The current
-sheet-backed panel can remain available as the old tool while new commands and
-panels write directly to D1.
+The image pipeline is clean-slate D1. It does not use Google Sheets for image
+capture, staging, placement, or discard state.
 
 ## Files
 
@@ -13,6 +12,8 @@ panels write directly to D1.
   `asset_saga`.
 - `worker/` contains the HTTP API that the VS Code extension can call when
   `oatImages.ledgerApiUrl` is configured.
+- `../bookmarklet/` contains the browser capture bookmarklet that writes image
+  candidates to this Worker instead of Google Sheets.
 
 ## Later Wrangler Commands
 
@@ -59,12 +60,19 @@ the local schema automatically, and stores its SQLite ledger at
 Endpoints:
 
 - `POST /assets` with `{ "asset": { ... } }`
+- `POST /captures/image` with browser capture fields such as `sourceUrl`,
+  `imageSrc`, `displayName`, `photographer`, `license`, and `intakeSection`.
+  The Worker normalizes these into a staged `asset` row. When
+  `UNSPLASH_ACCESS_KEY` or `PEXELS_ACCESS_KEY` is configured, the Worker also
+  asks the provider API for authoritative photographer metadata before writing
+  the asset.
 - `POST /review-image-needs` with `{ "contentDraft": { ... }, "imageNeed": { ... } }`
 - `POST /placements` with `{ "contentDraft": { ... }, "placement": { ... }, "saga": { ... } }`
 - `POST /sagas/:id/step`
 - `POST /sagas/:id/failed`
 - `POST /assets/:id/publishing`
 - `POST /assets/:id/publication`
+- `POST /assets/:id/discarded`
 - `POST /placements/:id/publishing`
 - `POST /placements/:id/snippet`
 - `POST /placements/:id/placed`
@@ -86,3 +94,13 @@ VS Code commands that use this API:
 Set `LEDGER_API_TOKEN` as a Worker secret when the API should require bearer
 authorization. Replace the placeholder `database_id` in `worker/wrangler.jsonc`
 with the ID returned by `wrangler d1 create`.
+
+Optional capture metadata secrets:
+
+- `UNSPLASH_ACCESS_KEY`
+- `PEXELS_ACCESS_KEY`
+
+These replace the old Google Apps Script Script Properties used by the
+sheet-backed capture endpoint. In deployed Cloudflare Workers, store them as
+Worker secrets. In `npm run ledger:dev:node`, pass them as environment
+variables before starting the local server.

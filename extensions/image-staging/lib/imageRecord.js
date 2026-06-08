@@ -24,7 +24,7 @@ function normalizeImageRecord(input = {}) {
     figureNumber: first(input.figureNumber, input.figNum),
     draftContext: first(input.draftContext),
 
-    // Compatibility fields used by the current webview and sheet adapter.
+    // Compatibility fields used by the current webview and placement helpers.
     name: first(input.name, displayName),
     url: first(input.url, sourceUrl)
   };

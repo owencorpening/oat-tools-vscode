@@ -154,9 +154,9 @@ so begin with inventory and boundaries.
 6. Move content drafts by series.
 7. Move public asset strays into the asset repo.
 8. Move local scripts into either tools, platform, or lab.
-9. Import legacy image sheet rows into D1.
-10. Update VS Code settings and scripts to use role-based paths.
-11. Leave `wraith` as an archived compatibility workspace only after links and
+9. Update VS Code settings and scripts to use role-based paths and the D1 image
+   ledger.
+10. Leave `wraith` as an archived compatibility workspace only after links and
     scripts no longer depend on it.
 
 ## Migration Safety Rules

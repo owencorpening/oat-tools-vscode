@@ -181,6 +181,15 @@ async function markAssetPublished(db, { assetId, assetPath, rawAssetUrl } = {}) 
   });
 }
 
+async function markAssetDiscarded(db, assetId) {
+  if (!assetId) throw new Error('markAssetDiscarded requires assetId');
+
+  await updateById(db, 'asset', assetId, {
+    status: 'discarded',
+    updated_at: now()
+  });
+}
+
 async function updatePlacementSnippet(db, { placementId, snippet, snippetFormat } = {}) {
   if (!placementId) throw new Error('updatePlacementSnippet requires placementId');
 
@@ -382,6 +391,7 @@ module.exports = {
   markPlacementPublishing,
   updateAssetPublication,
   markAssetPublished,
+  markAssetDiscarded,
   updatePlacementSnippet,
   markPlaced,
   markFailed,

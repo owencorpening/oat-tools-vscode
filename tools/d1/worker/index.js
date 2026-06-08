@@ -19,6 +19,9 @@ async function handleRequest(request, env = {}) {
     if (request.method === 'POST' && url.pathname === '/assets') {
       return json(await handleCreateAsset(request, env.DB), 201);
     }
+    if (request.method === 'POST' && url.pathname === '/captures/image') {
+      return json(await handleCaptureImage(request, env), 201);
+    }
     if (request.method === 'POST' && url.pathname === '/review-image-needs') {
       return json(await handleCreateReviewImageNeed(request, env.DB), 201);
     }
@@ -40,6 +43,10 @@ async function handleRequest(request, env = {}) {
     const assetPublicationMatch = url.pathname.match(/^\/assets\/([^/]+)\/publication$/);
     if (request.method === 'POST' && assetPublicationMatch) {
       return json(await handleUpdateAssetPublication(request, env.DB, assetPublicationMatch[1]));
+    }
+    const assetDiscardedMatch = url.pathname.match(/^\/assets\/([^/]+)\/discarded$/);
+    if (request.method === 'POST' && assetDiscardedMatch) {
+      return json(await handleMarkAssetDiscarded(env.DB, assetDiscardedMatch[1]));
     }
     const placementPublishingMatch = url.pathname.match(/^\/placements\/([^/]+)\/publishing$/);
     if (request.method === 'POST' && placementPublishingMatch) {
@@ -102,6 +109,11 @@ async function handleUpdateAssetPublication(request, db, assetId) {
   return { assetId: decodeURIComponent(assetId), ok: true };
 }
 
+async function handleMarkAssetDiscarded(db, assetId) {
+  await ledger.markAssetDiscarded(db, decodeURIComponent(assetId));
+  return { assetId: decodeURIComponent(assetId), ok: true };
+}
+
 async function handleMarkPlacementPublishing(db, placementId) {
   await ledger.markPlacementPublishing(db, decodeURIComponent(placementId));
   return { placementId: decodeURIComponent(placementId), ok: true };
@@ -132,6 +144,140 @@ async function handleCreateAsset(request, db) {
   if (!body.asset) throw httpError(400, 'Missing asset');
   const asset = await ledger.createAsset(db, body.asset);
   return { asset };
+}
+
+async function handleCaptureImage(request, env) {
+  const body = await readJson(request);
+  const asset = await normalizeCapturedAsset(body, env);
+  return { asset: await ledger.createAsset(env.DB, asset) };
+}
+
+async function normalizeCapturedAsset(input = {}, env = {}) {
+  const sourceUrl = first(input.sourceUrl, input.url);
+  if (!sourceUrl) throw httpError(400, 'Missing sourceUrl');
+
+  const metadata = await resolveCapturedMetadata(sourceUrl, env);
+  const displayName = first(input.displayName, input.name, input.pageTitle, titleFromUrl(sourceUrl));
+  const photographer = first(metadata.photographer, input.photographer, 'UNKNOWN');
+  const license = first(input.license, licenseForSource(sourceUrl));
+  const imageSrc = first(input.imageSrc, input.image_src, metadata.imageSrc);
+
+  return {
+    id: first(input.id, newAssetId()),
+    assetType: first(input.assetType, 'image'),
+    slug: first(input.slug, slugFromName(displayName)),
+    displayName,
+    sourceName: first(input.sourceName, input.name, displayName),
+    sourceUrl,
+    imageSrc,
+    photographer,
+    license,
+    attribution: first(input.attribution, attributionFor({ displayName, photographer, sourceUrl, license })),
+    intakeSection: emptyToUndefined(input.intakeSection),
+    status: first(input.status, capturedStatus({ sourceUrl, photographer, license }))
+  };
+}
+
+function capturedStatus(asset) {
+  return asset.sourceUrl ? 'staged' : 'needs-provenance';
+}
+
+function licenseForSource(sourceUrl) {
+  if (/pexels\.com|pixabay\.com|unsplash\.com/i.test(sourceUrl)) {
+    return 'CC0 Equivalent (No Attribution)';
+  }
+  return 'MANUAL CHECK REQUIRED';
+}
+
+function attributionFor({ displayName, photographer, sourceUrl, license }) {
+  return `Image: ${displayName}, by ${photographer}, Source: ${sourceDomain(sourceUrl)}. License: ${license}.`;
+}
+
+function sourceDomain(sourceUrl) {
+  try {
+    const parsed = new URL(sourceUrl);
+    return parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return sourceUrl;
+  }
+}
+
+async function resolveCapturedMetadata(sourceUrl, env = {}) {
+  const unsplashId = extractUnsplashPhotoId(sourceUrl);
+  if (unsplashId && env.UNSPLASH_ACCESS_KEY) {
+    return fetchUnsplashMetadata(unsplashId, env);
+  }
+
+  const pexelsId = extractPexelsPhotoId(sourceUrl);
+  if (pexelsId && env.PEXELS_ACCESS_KEY) {
+    return fetchPexelsMetadata(pexelsId, env);
+  }
+
+  return {};
+}
+
+async function fetchUnsplashMetadata(photoId, env) {
+  const data = await fetchJson(
+    `https://api.unsplash.com/photos/${encodeURIComponent(photoId)}?client_id=${encodeURIComponent(env.UNSPLASH_ACCESS_KEY)}`,
+    {},
+    env
+  );
+  return {
+    photographer: data && data.user && data.user.name,
+    imageSrc: data && data.urls && (data.urls.regular || data.urls.raw || data.urls.full)
+  };
+}
+
+async function fetchPexelsMetadata(photoId, env) {
+  const data = await fetchJson(
+    `https://api.pexels.com/v1/photos/${encodeURIComponent(photoId)}`,
+    { headers: { Authorization: env.PEXELS_ACCESS_KEY } },
+    env
+  );
+  return {
+    photographer: data && data.photographer,
+    imageSrc: data && data.src && (data.src.large2x || data.src.large || data.src.original)
+  };
+}
+
+async function fetchJson(url, init, env = {}) {
+  const fetcher = env.fetch || globalThis.fetch;
+  if (typeof fetcher !== 'function') return {};
+
+  try {
+    const response = await fetcher(url, init);
+    if (!response || !response.ok) return {};
+    return await response.json();
+  } catch {
+    return {};
+  }
+}
+
+function extractUnsplashPhotoId(sourceUrl) {
+  try {
+    const parsed = new URL(sourceUrl);
+    if (!/(^|\.)unsplash\.com$/i.test(parsed.hostname)) return '';
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const photosIndex = parts.indexOf('photos');
+    if (photosIndex === -1 || !parts[photosIndex + 1]) return '';
+    return parts[photosIndex + 1];
+  } catch {
+    return '';
+  }
+}
+
+function extractPexelsPhotoId(sourceUrl) {
+  try {
+    const parsed = new URL(sourceUrl);
+    if (!/(^|\.)pexels\.com$/i.test(parsed.hostname)) return '';
+    const parts = parsed.pathname.split('/').filter(Boolean);
+    const photoIndex = parts.indexOf('photo');
+    const slug = photoIndex === -1 ? parts[parts.length - 1] : parts[photoIndex + 1];
+    const idMatch = String(slug || '').match(/(\d+)$/);
+    return idMatch ? idMatch[1] : '';
+  } catch {
+    return '';
+  }
 }
 
 async function handleCreateReviewImageNeed(request, db) {
@@ -240,16 +386,68 @@ function httpError(status, message) {
   return error;
 }
 
+function newAssetId() {
+  if (globalThis.crypto && typeof globalThis.crypto.randomUUID === 'function') {
+    return `asset-${globalThis.crypto.randomUUID()}`;
+  }
+  return `asset-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function slugFromName(name = '') {
+  return String(name || '')
+    .trim()
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^a-zA-Z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .toLowerCase() || 'captured-image';
+}
+
+function titleFromUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const lastSegment = parsed.pathname.split('/').filter(Boolean).pop();
+    return humanize(lastSegment || parsed.hostname);
+  } catch {
+    return 'Captured image';
+  }
+}
+
+function humanize(value = '') {
+  return String(value || '')
+    .replace(/\.[^.]+$/, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .replace(/^./, c => c.toUpperCase()) || 'Captured image';
+}
+
+function first(...values) {
+  for (const value of values) {
+    const clean = emptyToUndefined(value);
+    if (clean !== undefined) return clean;
+  }
+  return undefined;
+}
+
+function emptyToUndefined(value) {
+  if (value === undefined || value === null) return undefined;
+  const clean = String(value).trim();
+  return clean === '' ? undefined : clean;
+}
+
 module.exports = {
   fetch,
   handleRequest,
   handleCreateAsset,
+  handleCaptureImage,
+  normalizeCapturedAsset,
   handleCreateReviewImageNeed,
   handleCreatePlacement,
   handleMarkSagaStep,
   handleMarkFailed,
   handleMarkAssetPublishing,
   handleUpdateAssetPublication,
+  handleMarkAssetDiscarded,
   handleMarkPlacementPublishing,
   handleUpdatePlacementSnippet,
   handleMarkPlaced,

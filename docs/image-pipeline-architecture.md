@@ -76,9 +76,6 @@ Model assets and placements separately:
   location, target-specific snippet state, placement status, and published URL.
 - A single asset may have multiple placements, such as a Substack figure, a
   carousel background, and a LinkedIn handoff.
-- During migration, legacy sheet fields such as `target`, `placed_in`, and
-  `figureNumber` can be normalized into `asset_placement` rows rather than kept
-  as long-term asset fields.
 
 ## Ledger Choice
 
@@ -107,28 +104,20 @@ Eliminate Google Sheets from the target image pipeline:
 - No sheet update as the placement/discard transaction.
 - No sheet-specific service account path for image workflow state.
 
-During migration, the existing image staging sheet can be imported into the
-publishing ledger and then treated as legacy data. If a spreadsheet export
-remains useful for human review, generate it from the ledger rather than making
-it an operational dependency.
-
 Keep Google Sheets only for promoted tables when the sheet itself is the
 reader-facing accessible data artifact.
 
 ## Fresh-Start Plan
 
-If continuity with the current staging sheet is not important, prefer a fresh
-ledger-native implementation over migration compatibility.
+This image pipeline is clean-slate D1. Spreadsheet continuity is not part of the
+implementation target.
 
 Fresh-start rules:
 
-- Treat the existing image staging sheet as historical reference only.
-- Do not build new sheet-backed adapters or import jobs unless a specific legacy
-  row is still needed.
-- Keep the current sheet-based panel working as the old tool until the new ledger
-  flow is usable.
-- Build the new ledger, intake, saga, and panel against the publishing ledger from the first
-  implementation step.
+- Do not build sheet-backed adapters or image sheet import jobs.
+- Build the ledger, intake, saga, and panel against the publishing ledger from
+  the first implementation step.
+- Keep capture, placement, discard, and retry state in D1.
 
 Fresh-start baby steps implemented in this repo:
 
@@ -154,6 +143,8 @@ Fresh-start baby steps implemented in this repo:
 8. Added `OAT Images: Execute Planned Placement Run`, a guarded local command
    that calls `imagePipeline.placeAsset`, writes or replaces the draft snippet,
    and updates saga state through Worker-backed ledger lifecycle endpoints.
+9. Added the D1 image capture bookmarklet under `tools/bookmarklet` and a Worker
+   `POST /captures/image` route so browser capture writes directly to D1.
 
 Remaining implementation gap:
 
@@ -181,9 +172,10 @@ they are accepted for publication.
 
 Images can enter the pipeline from several places:
 
-- **Staging sheet rows:** images captured by the bookmarklet or another logging
-  path and marked `staged` in the current implementation. Target state: capture
-  directly into the ledger.
+- **D1 bookmarklet captures:** images captured in the browser by the bookmarklet
+  in `tools/bookmarklet`. The bookmarklet posts page/source metadata to the
+  ledger Worker, which enriches provider metadata when API keys are configured
+  and creates a staged `asset` record.
 - **`~/Downloads`:** local files that may have been generated, downloaded, or
   routed by a watcher.
 - **AI-generated files:** obvious generated images such as `chatgpt*.png` or
@@ -282,8 +274,8 @@ drives UI behavior: `auto-retry` can be retried by the orchestrator, `manual-rev
 needs a VS Code notification or queue item, and `discard` runs cleanup for
 abandoned work. If any step fails, keep the current step and error in the
 publishing ledger so the pipeline can retry or clean up deliberately. This is
-safer than scattering half-finished state across `~/Downloads`, `/tmp`, legacy
-image sheets, and the asset repo.
+safer than scattering half-finished state across `~/Downloads`, `/tmp`, and the
+asset repo.
 
 ## Review-Triggered Image Hunt
 
@@ -416,8 +408,7 @@ extensions/image-staging/lib/
 ├── assetLedgerD1.js      # publishing ledger asset records, state transitions, retry log
 ├── imageAssetsRepo.js    # asset repo paths, provenance files, raw URLs, git
 ├── imagePipeline.js      # thin saga orchestrator and retry routing
-├── snippetBuilder.js     # substack, carousel, linkedin-post snippets
-└── thumbResolver.js      # preview resolution
+└── snippetBuilder.js     # substack, carousel, linkedin-post snippets
 
 extensions/table-tools/lib/
 ├── tableRecord.js        # parsed table descriptor and naming

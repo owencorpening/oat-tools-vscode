@@ -36,9 +36,39 @@ Both tools assume the content workflow has these pieces available:
 promotion calls the Cloudflare Worker that creates styled Google Sheets.
 
 `OAT Image Staging` reads from the image ledger when `oatImages.ledgerApiUrl` is
-configured, and falls back to the legacy staging sheet otherwise. In this stack,
-the image ledger is backed by Cloudflare D1. Do not add new image workflow
-dependencies on Sheets.
+configured. In this stack, the image ledger is backed by Cloudflare D1. The
+image pipeline does not use Google Sheets for capture, staging, placement, or
+discard state.
+
+## Use Case: Capture a Web Image With the Bookmarklet
+
+Use the D1 image capture bookmarklet when you are browsing Unsplash, Pexels,
+Pixabay, or another source site and want to stage an image without switching
+back to VS Code.
+
+Steps:
+
+1. Install the bookmarklet from [../tools/bookmarklet/README.md](../tools/bookmarklet/README.md).
+2. Start or deploy the ledger Worker.
+3. Browse to the source page for the image.
+4. Click the bookmarklet.
+5. Refresh `OAT Image Staging` in VS Code.
+6. Review the staged asset record before planning placement.
+
+What the bookmarklet does:
+
+- Captures the page URL and best direct image URL it can find.
+- Captures photographer and license hints when the page exposes them.
+- Posts those fields to `POST /captures/image` on the D1 ledger Worker.
+- Lets the Worker enrich Unsplash/Pexels photographer metadata when provider API
+  keys are configured.
+- Creates a staged ledger `asset` record. It does not write to Google Sheets.
+
+Result:
+
+The image appears in the D1-backed staging queue and can move through the same
+placement saga as URL intake, local-file intake, and review-triggered image
+needs.
 
 ## Use Case: Promote Draft Tables
 
@@ -100,8 +130,7 @@ Steps:
 2. Infer a proposed image name and any metadata from the filename.
 3. Ask for missing provenance: source URL, creator or photographer, and license.
 4. Normalize the image into the same record shape as a ledger asset record.
-5. Save the asset to the ledger when `oatImages.ledgerApiUrl` is configured, or
-   copy the JSON payload for manual review.
+5. Save the asset to the D1 ledger.
 6. Continue through planned placement and local run preparation.
 
 Result:
@@ -120,8 +149,7 @@ Steps:
 1. Select the dense passage, image placeholder, or insertion point in the draft.
 2. Create an image need with a short reason, such as `visual break`,
    `concept diagram`, `map`, `sourced photo`, or `data figure`.
-3. Save the image need to the ledger when `oatImages.ledgerApiUrl` is
-   configured, or copy the JSON payload for manual review.
+3. Save the image need to the D1 ledger.
 4. Choose the intake path later:
    - Use an existing staged asset.
    - Search for and capture a new sourced image.
@@ -159,8 +187,7 @@ Steps:
 
 What the tool does:
 
-- Reads ledger staged assets when `oatImages.ledgerApiUrl` is configured, otherwise
-  falls back to the legacy sheet-backed panel.
+- Reads staged assets from the D1 ledger.
 - Resolves a thumbnail from `image_src`, a direct image URL, Unsplash, or page
   metadata.
 - Creates a ledger `asset_placement` with `status = planned`.
@@ -252,32 +279,6 @@ Use these commands when `oatImages.ledgerApiUrl` points at the ledger Worker:
 The prepare command copies placement instructions. It does not yet execute the
 file, Git, or editor side effects.
 
-## Legacy Image Staging Sheet Columns
-
-When `oatImages.ledgerApiUrl` is not configured, the image staging panel can
-still fall back to the legacy sheet path and expects `Sheet1` columns `A:L`.
-This is a compatibility path, not the target architecture. New image pipeline
-work should use ledger records instead of sheet rows.
-
-| Column | Field |
-|--------|-------|
-| A | Date |
-| B | Name |
-| C | URL |
-| D | Photographer |
-| E | License |
-| F | Substack Post Title |
-| G | Attribution String |
-| H | status |
-| I | placed_in |
-| J | placed_date |
-| K | target |
-| L | image_src |
-
-Rows with `status` set to `staged` appear in the legacy panel. Legacy placement
-updates `status`, `placed_in`, `placed_date`, and `target`. The ledger-native path
-uses `asset`, `asset_placement`, and `asset_saga` records instead.
-
 ## Operational Checks
 
 Use these quick checks when the workflow feels stuck:
@@ -288,10 +289,7 @@ Use these quick checks when the workflow feels stuck:
   browser setup are working.
 - If generated or placed images are not available through raw GitHub URLs,
   confirm the asset repo commit and push succeeded.
-- If the current image panel is empty, confirm the sheet ID and that rows use
-  `status = staged`. In the ledger target, confirm the ledger has staged records.
+- If the current image panel is empty, confirm `oatImages.ledgerApiUrl`, the
+  Worker process, and that D1 has staged asset records.
 - If image thumbnails do not resolve, confirm `image_src`, the source URL, and
   the optional Unsplash access key.
-- If legacy sheet updates fail, confirm the service account credentials can
-  access the configured Google Sheet. In the ledger target, this failure mode goes
-  away.

@@ -23,6 +23,48 @@ async function testCreateAsset() {
   assert.strictEqual(env.DB.one('asset', 'asset-1').source_url, 'https://example.com/river-map.jpg');
 }
 
+async function testCaptureImage() {
+  const fetched = [];
+  const env = {
+    DB: new FakeD1(),
+    LEDGER_API_TOKEN: 'secret',
+    UNSPLASH_ACCESS_KEY: 'unsplash-key',
+    fetch: async url => {
+      fetched.push(url);
+      return {
+        ok: true,
+        json: async () => ({
+          user: { name: 'API Photographer' },
+          urls: { regular: 'https://images.unsplash.com/api-photo' }
+        })
+      };
+    }
+  };
+  const response = await handleRequest(jsonRequest('/captures/image', {
+    id: 'asset-capture',
+    pageTitle: 'River Crossing Photo',
+    sourceUrl: 'https://unsplash.com/photos/river-crossing-abc123',
+    photographer: 'Scraped Photographer',
+    intakeSection: 'standalone/river-story'
+  }, 'secret'), env);
+  const body = await response.json();
+  const row = env.DB.one('asset', 'asset-capture');
+
+  assert.strictEqual(response.status, 201);
+  assert.strictEqual(body.asset.id, 'asset-capture');
+  assert.strictEqual(row.slug, 'river-crossing-photo');
+  assert.strictEqual(row.source_url, 'https://unsplash.com/photos/river-crossing-abc123');
+  assert.strictEqual(row.image_src, 'https://images.unsplash.com/api-photo');
+  assert.strictEqual(row.photographer, 'API Photographer');
+  assert.strictEqual(row.license, 'CC0 Equivalent (No Attribution)');
+  assert.strictEqual(row.attribution, 'Image: River Crossing Photo, by API Photographer, Source: unsplash.com. License: CC0 Equivalent (No Attribution).');
+  assert.strictEqual(row.status, 'staged');
+  assert.strictEqual(row.intake_section, 'standalone/river-story');
+  assert.deepStrictEqual(fetched, [
+    'https://api.unsplash.com/photos/river-crossing-abc123?client_id=unsplash-key'
+  ]);
+}
+
 async function testCreateReviewImageNeedUpsertsDraft() {
   const env = { DB: new FakeD1() };
   const payload = {
@@ -145,6 +187,10 @@ async function testPlacementLifecycleRoutes() {
   }), env);
   assert.strictEqual(response.status, 200);
   assert.strictEqual(env.DB.one('asset', 'asset-1').asset_path, 'water-series/part-09/river-map');
+
+  response = await handleRequest(jsonRequest('/assets/asset-1/discarded', {}), env);
+  assert.strictEqual(response.status, 200);
+  assert.strictEqual(env.DB.one('asset', 'asset-1').status, 'discarded');
 
   response = await handleRequest(jsonRequest('/placements/placement-1/snippet', {
     snippet: '<figure></figure>',
@@ -351,6 +397,7 @@ function byCreatedAt(a, b) {
 
 (async () => {
   await testCreateAsset();
+  await testCaptureImage();
   await testCreateReviewImageNeedUpsertsDraft();
   await testCreatePlacementWithSaga();
   await testListRoutes();

@@ -17,15 +17,18 @@ your draft, commits and pushes Git changes, or marks the image fully placed.
 2. Set `oatImages.ledgerApiUrl` in VS Code. For local development, use
    `http://127.0.0.1:8787`.
 3. Optionally set `oatImages.ledgerApiToken`.
-4. Optionally set `oatImages.imagesRepoPath`; otherwise the prepare command uses
+4. Install the D1 image capture bookmarklet from
+   [../tools/bookmarklet/README.md](../tools/bookmarklet/README.md) if you want
+   one-click web capture outside VS Code.
+5. Optionally set `oatImages.imagesRepoPath`; otherwise the prepare command uses
    `~/dev/images`.
-5. Open the target markdown draft in VS Code.
+6. Open the target markdown draft in VS Code.
 
 ## The Short Flow
 
 ```mermaid
 flowchart LR
-  A[Add image] --> B[Review staged image]
+  A[Capture or add image] --> B[Review staged image]
   B --> C[Click Place]
   C --> D[Create planned placement]
   D --> E[List planned placements]
@@ -37,6 +40,7 @@ flowchart LR
 
 Frame 1: Add an image to the notebook.
 
+- For one-click browser capture, click the OAT D1 image capture bookmarklet.
 - For a web image, run `OAT Images: Intake URL`.
 - For a local image, run `OAT Images: Intake Local File`.
 - For a late-review visual gap, run `OAT Images: Create Review Image Need`.
@@ -97,6 +101,7 @@ marking the placement as done.
 
 | Goal | Command |
 |------|---------|
+| Capture a browser image | D1 image capture bookmarklet in `tools/bookmarklet` |
 | Add a web image | `OAT Images: Intake URL` |
 | Add a local image | `OAT Images: Intake Local File` |
 | Record a late visual gap | `OAT Images: Create Review Image Need` |
@@ -111,8 +116,6 @@ marking the placement as done.
 
 - No staged assets: confirm `oatImages.ledgerApiUrl` is set and the notebook
   service is running.
-- Panel is showing legacy sheet records: `oatImages.ledgerApiUrl` is probably
-  empty.
 - Prepare command has no placements: click `Place` on a staged image first.
 - Placement instructions have the wrong repo path: set
   `oatImages.imagesRepoPath`.
@@ -122,6 +125,10 @@ marking the placement as done.
 - Image notebook = the human-facing image ledger.
 - The publishing ledger is backed by Cloudflare D1 in this stack.
 - The notebook service is the ledger Worker.
+- The browser bookmarklet posts to the ledger Worker at `POST /captures/image`;
+  it does not write to Google Sheets.
+- The ledger Worker can use optional `UNSPLASH_ACCESS_KEY` and
+  `PEXELS_ACCESS_KEY` secrets to enrich captured photographer metadata.
 - Local development can run through `npm run ledger:dev:node` when Wrangler's
   local D1 runtime is unavailable.
 - Placement instructions are JSON shaped for `imagePipeline.placeAsset`.

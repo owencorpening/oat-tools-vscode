@@ -75,6 +75,12 @@ function createLedgerApiClient({ baseUrl, token, request = requestJson } = {}) {
         body: { assetPath, rawAssetUrl }
       });
     },
+    discardAsset(assetId) {
+      return request(`${normalizedBase}/assets/${encodeURIComponent(assetId)}/discarded`, {
+        method: 'POST',
+        token
+      });
+    },
     updatePlacementSnippet(db, { placementId, snippet, snippetFormat } = {}) {
       return request(`${normalizedBase}/placements/${encodeURIComponent(placementId)}/snippet`, {
         method: 'POST',

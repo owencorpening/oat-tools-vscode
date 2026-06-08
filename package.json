@@ -5,6 +5,7 @@
   "version": "0.2.0",
   "scripts": {
     "export:carousel": "node tools/carousels/export-carousel.js",
+    "bookmarklet:build": "node tools/bookmarklet/build-bookmarklet.js",
     "render:blockquotes": "python3 tools/blockquotes/blockquote-renderer.py",
     "validate:assets": "node tools/assets/validate-provenance.js",
     "test": "node extensions/table-tools/test/parseTables.test.js && node extensions/table-tools/test/tableImageWidth.test.js && node extensions/image-staging/test/imagePipeline.test.js && node extensions/image-staging/test/assetLedgerD1.test.js && node extensions/image-staging/test/imageAssetsRepo.test.js && node extensions/image-staging/test/reviewImageNeedCommand.test.js && node extensions/image-staging/test/localFileIntakeCommand.test.js && node extensions/image-staging/test/urlIntakeCommand.test.js && node extensions/image-staging/test/ledgerApiClient.test.js && node extensions/image-staging/test/ledgerBrowseCommands.test.js && node extensions/image-staging/test/imagePanelProvider.test.js && node extensions/image-staging/test/plannedPlacementRun.test.js && node extensions/image-staging/test/plannedPlacementRunCommand.test.js && node extensions/image-staging/test/executePlannedPlacementCommand.test.js && node tools/d1/worker/ledgerApiWorker.test.js",

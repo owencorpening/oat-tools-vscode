@@ -16,7 +16,9 @@ function main() {
   const db = createD1Database(dbPath);
   const env = {
     DB: db,
-    LEDGER_API_TOKEN: process.env.LEDGER_API_TOKEN || ''
+    LEDGER_API_TOKEN: process.env.LEDGER_API_TOKEN || '',
+    UNSPLASH_ACCESS_KEY: process.env.UNSPLASH_ACCESS_KEY || '',
+    PEXELS_ACCESS_KEY: process.env.PEXELS_ACCESS_KEY || ''
   };
 
   const server = http.createServer((req, res) => {
