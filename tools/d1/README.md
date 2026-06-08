@@ -43,6 +43,17 @@ Run the Worker locally after local migrations have been applied:
 npm run ledger:dev
 ```
 
+If Wrangler's local `workerd` runtime fails to start its D1 binding, use the
+Node-backed local Worker server instead:
+
+```bash
+npm run ledger:dev:node
+```
+
+This serves the same Worker request handler at `http://127.0.0.1:8787`, applies
+the local schema automatically, and stores its SQLite ledger at
+`tools/d1/worker/.wrangler/state/local-ledger.sqlite`.
+
 ## Worker API
 
 Endpoints:
@@ -50,6 +61,13 @@ Endpoints:
 - `POST /assets` with `{ "asset": { ... } }`
 - `POST /review-image-needs` with `{ "contentDraft": { ... }, "imageNeed": { ... } }`
 - `POST /placements` with `{ "contentDraft": { ... }, "placement": { ... }, "saga": { ... } }`
+- `POST /sagas/:id/step`
+- `POST /sagas/:id/failed`
+- `POST /assets/:id/publishing`
+- `POST /assets/:id/publication`
+- `POST /placements/:id/publishing`
+- `POST /placements/:id/snippet`
+- `POST /placements/:id/placed`
 - `GET /image-needs/open`
 - `GET /assets/staged`
 - `GET /placements/planned`
@@ -63,6 +81,7 @@ VS Code commands that use this API:
 - `OAT Images: List Staged Notebook Images`
 - `OAT Images: List Planned Image Placements`
 - `OAT Images: Prepare Planned Placement Run`
+- `OAT Images: Execute Planned Placement Run`
 
 Set `LEDGER_API_TOKEN` as a Worker secret when the API should require bearer
 authorization. Replace the placeholder `database_id` in `worker/wrangler.jsonc`

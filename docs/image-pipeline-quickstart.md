@@ -14,7 +14,8 @@ your draft, commits and pushes Git changes, or marks the image fully placed.
 
 1. Ask Codex to start the image notebook service, or point VS Code at an already
    running one.
-2. Set `oatImages.ledgerApiUrl` in VS Code.
+2. Set `oatImages.ledgerApiUrl` in VS Code. For local development, use
+   `http://127.0.0.1:8787`.
 3. Optionally set `oatImages.ledgerApiToken`.
 4. Optionally set `oatImages.imagesRepoPath`; otherwise the prepare command uses
    `~/dev/images`.
@@ -121,6 +122,8 @@ marking the placement as done.
 - Image notebook = the human-facing image ledger.
 - The publishing ledger is backed by Cloudflare D1 in this stack.
 - The notebook service is the ledger Worker.
+- Local development can run through `npm run ledger:dev:node` when Wrangler's
+  local D1 runtime is unavailable.
 - Placement instructions are JSON shaped for `imagePipeline.placeAsset`.
 - The execute command runs `imagePipeline.placeAsset` through the ledger Worker
   lifecycle endpoints.

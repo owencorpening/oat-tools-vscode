@@ -1,4 +1,5 @@
 credentials/
+node_modules/
 worker/.wrangler/
 .dev.vars
 .env
