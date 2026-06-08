@@ -62,7 +62,7 @@ async function intakeUrl({ vscode, db, ledgerWriter, assetLedger = ledger, image
     vscode.window.showInformationMessage(`OAT: Staged URL asset: ${asset.displayName}.`);
   } else {
     await vscode.env.clipboard.writeText(JSON.stringify({ asset }, null, 2));
-    vscode.window.showInformationMessage('OAT: D1 URL intake copied as JSON; configure a ledger writer to save it directly.');
+    vscode.window.showInformationMessage('OAT: Image notebook URL intake copied as JSON; configure a ledger writer to save it directly.');
   }
 
   return { asset };

@@ -16,7 +16,7 @@ The pipeline uses durable stores by role, not by repo name:
 | Content repo | Drafts, standards, templates, source markdown, carousel files, and publish workflow notes. Currently `~/dev/wraith`. |
 | Asset repo | Final publishable public assets and provenance files. Currently `~/dev/images`. |
 | Tool repo | VS Code extensions, Workers, scripts, tests, and pipeline implementation. Currently this repo. |
-| Cloudflare D1 | Preferred transactional ledger for content records, asset records, source intake, placement state, audience relationships, and retry/cleanup status. |
+| Publishing ledger | Preferred transactional ledger for content records, asset records, source intake, placement state, audience relationships, and retry/cleanup status. In this stack, this is Cloudflare D1. |
 | Raw GitHub URL | Permanent published reference for Substack, carousel, and handoff output. |
 
 VS Code is one interface over this pipeline. The extension should orchestrate the
@@ -28,7 +28,7 @@ The image pipeline is one piece of a larger publishing system. Anticipate an
 audience, paid or otherwise, and keep that relationship in the database rather
 than in Git.
 
-Core D1 entities:
+Core publishing ledger entities:
 
 | Entity | Purpose |
 |--------|---------|
@@ -60,10 +60,11 @@ Audience and payment rules:
 
 - Do not store audience lists, email addresses, payment records, or private
   customer notes in Git.
-- Do not store card details or payment secrets in D1. Use a payment/subscription
-  provider as the authority for money movement.
-- D1 may store provider IDs, subscription state, entitlement state, timestamps,
-  and lightweight relationship notes needed by the publishing workflow.
+- Do not store card details or payment secrets in the publishing ledger. Use a
+  payment/subscription provider as the authority for money movement.
+- The publishing ledger may store provider IDs, subscription state, entitlement
+  state, timestamps, and lightweight relationship notes needed by the publishing
+  workflow.
 - Public content and public assets can live in Git. Private audience state lives
   in the ledger.
 
@@ -81,12 +82,12 @@ Model assets and placements separately:
 
 ## Ledger Choice
 
-Cloudflare D1 is the preferred shared ledger because this repo already uses
+Cloudflare D1 is the preferred shared ledger implementation because this repo already uses
 Cloudflare Workers for table promotion. Keeping the asset ledger in the same
 platform gives the pipeline a natural place to handle transactional state and
 removes Google Sheets from the image workflow target.
 
-Use D1 for:
+Use the publishing ledger for:
 
 - Asset records and immutable asset IDs.
 - Content draft records and draft locations when a visual need is tied to a
@@ -106,9 +107,10 @@ Eliminate Google Sheets from the target image pipeline:
 - No sheet update as the placement/discard transaction.
 - No sheet-specific service account path for image workflow state.
 
-During migration, the existing image staging sheet can be imported into D1 and
-then treated as legacy data. If a spreadsheet export remains useful for human
-review, generate it from D1 rather than making it an operational dependency.
+During migration, the existing image staging sheet can be imported into the
+publishing ledger and then treated as legacy data. If a spreadsheet export
+remains useful for human review, generate it from the ledger rather than making
+it an operational dependency.
 
 Keep Google Sheets only for promoted tables when the sheet itself is the
 reader-facing accessible data artifact.
@@ -116,33 +118,46 @@ reader-facing accessible data artifact.
 ## Fresh-Start Plan
 
 If continuity with the current staging sheet is not important, prefer a fresh
-D1-native implementation over migration compatibility.
+ledger-native implementation over migration compatibility.
 
 Fresh-start rules:
 
 - Treat the existing image staging sheet as historical reference only.
 - Do not build new sheet-backed adapters or import jobs unless a specific legacy
   row is still needed.
-- Keep the current sheet-based panel working as the old tool until the new D1
+- Keep the current sheet-based panel working as the old tool until the new ledger
   flow is usable.
-- Build the new ledger, intake, saga, and panel against D1 from the first
+- Build the new ledger, intake, saga, and panel against the publishing ledger from the first
   implementation step.
 
-Fresh-start baby steps:
+Fresh-start baby steps implemented in this repo:
 
-1. Create the first D1 schema for `asset`, `asset_placement`, `image_need`,
+1. Created the first ledger schema for `asset`, `asset_placement`, `image_need`,
    `content_draft`, and `asset_saga`.
-2. Add `assetLedgerD1.js` with small ledger functions:
+2. Added `assetLedgerD1.js` with small ledger functions:
    `createAsset`, `createPlacement`, `createImageNeed`, `markSagaStep`,
-   `markPlaced`, `markFailed`, `listOpenNeeds`, and `listStagedAssets`.
-3. Add path-specific intake functions in `imageIntake.js` for URLs, Downloads
+   `markPlaced`, `markFailed`, `listOpenNeeds`, `listStagedAssets`, and
+   `listPlannedPlacements`.
+3. Added path-specific intake functions in `imageIntake.js` for URLs, Downloads
    files, AI-generated files, user-provided files, and review-triggered needs.
-4. Add a thin `imagePipeline.js` that runs one D1-backed placement saga from an
-   existing asset record to a placed snippet.
-5. Build a new VS Code command or panel entry point for D1 assets instead of
-   retrofitting the sheet panel first.
-6. After image placement works, route table screenshots through the same asset
-   saga and shared asset repo utilities.
+4. Added a thin `imagePipeline.js` that runs one ledger-backed placement saga
+   from an existing asset record to a placed snippet.
+5. Added ledger Worker API endpoints for assets, review image needs, placements,
+   open needs, staged assets, and planned placements.
+6. Added VS Code commands and panel entry points for ledger URL intake, local-file
+   intake, review image needs, staged assets, planned placements, and planned
+   placement instructions.
+7. Kept local side-effect execution explicit: `OAT Images: Prepare Planned
+   Placement Run` copies placement instructions instead of silently touching the
+   asset repo, Git, or the active draft.
+
+Remaining implementation gap:
+
+- Turn the prepared placement instructions into a guarded local execution command that calls
+  `imagePipeline.placeAsset`, writes or replaces the draft snippet, and updates
+  saga state through a local or Worker-backed ledger adapter.
+- After image placement works end to end, route table screenshots through the
+  same asset saga and shared asset repo utilities.
 
 Keep Git for:
 
@@ -158,8 +173,8 @@ Do not require Git for:
 - Review-hunt scratch assets.
 - Temporary render files.
 
-Those should stay in D1-managed staging state and temporary storage until they
-are accepted for publication.
+Those should stay in ledger-managed staging state and temporary storage until
+they are accepted for publication.
 
 ## Source Intake
 
@@ -167,7 +182,7 @@ Images can enter the pipeline from several places:
 
 - **Staging sheet rows:** images captured by the bookmarklet or another logging
   path and marked `staged` in the current implementation. Target state: capture
-  directly into D1.
+  directly into the ledger.
 - **`~/Downloads`:** local files that may have been generated, downloaded, or
   routed by a watcher.
 - **AI-generated files:** obvious generated images such as `chatgpt*.png` or
@@ -246,9 +261,9 @@ Image need records should carry review-time visual gaps:
 
 ## Transaction Model
 
-D1 can make the ledger transactional, but it cannot make filesystem writes, Git
-commits, table Google Sheet creation, and editor edits part of one database
-transaction. Model those steps as an idempotent saga:
+The publishing ledger can make the record changes transactional, but it cannot
+make filesystem writes, Git commits, table Google Sheet creation, and editor
+edits part of one database transaction. Model those steps as an idempotent saga:
 
 | Step | Forward action | Idempotency key | Compensation or retry rule | Resolution |
 |------|----------------|-----------------|-----------------------------|------------|
@@ -264,10 +279,10 @@ Each saga record should store `current_step`, `last_error`, `retry_count`,
 `next_retry_at`, `resolution`, and a short `compensation` note. `resolution`
 drives UI behavior: `auto-retry` can be retried by the orchestrator, `manual-review`
 needs a VS Code notification or queue item, and `discard` runs cleanup for
-abandoned work. If any step fails, keep the current step and error in D1 so the
-pipeline can retry or clean up deliberately. This is safer than scattering
-half-finished state across `~/Downloads`, `/tmp`, legacy image sheets, and the
-asset repo.
+abandoned work. If any step fails, keep the current step and error in the
+publishing ledger so the pipeline can retry or clean up deliberately. This is
+safer than scattering half-finished state across `~/Downloads`, `/tmp`, legacy
+image sheets, and the asset repo.
 
 ## Review-Triggered Image Hunt
 
@@ -282,7 +297,7 @@ That should be modeled as a pipeline entry point:
 3. Create an `image_need` record with `draftLocation`, `reason`, and
    `status = open`.
 4. Let the user choose an intake path:
-   - Search/source a web image and capture it directly to D1.
+   - Search/source a web image and capture it directly to the ledger.
    - Use an existing staged image.
    - Use a local image from `~/Downloads`.
    - Provide or generate an AI image.
@@ -328,7 +343,7 @@ For a publishable image, placement creates:
 - Provenance files.
 - A raw GitHub URL.
 - A target-specific snippet.
-- A D1 `asset_placement` transition to `placed`.
+- A ledger `asset_placement` transition to `placed`.
 
 For Substack body images, the snippet should be an HTML figure:
 
@@ -388,8 +403,8 @@ Table promotion maps onto the saga with one table-specific side effect:
 | 6 | Replace the markdown table with the generated figure embed. |
 | 7 | Mark the `asset_placement` `placed` and the asset `published` when the repo and draft agree. |
 
-The current table tool already performs most side effects, but wiring it to D1
-and saga retry state is a migration gap to close.
+The current table tool already performs most side effects, but wiring it to the
+publishing ledger and saga retry state is a migration gap to close.
 
 ## Suggested Module Boundaries
 
@@ -397,7 +412,7 @@ and saga retry state is a migration gap to close.
 extensions/image-staging/lib/
 ├── imageRecord.js        # normalize and validate records
 ├── imageIntake.js        # composed intake functions for URL, Downloads, AI, and user files
-├── assetLedgerD1.js      # D1 asset records, state transitions, retry log
+├── assetLedgerD1.js      # publishing ledger asset records, state transitions, retry log
 ├── imageAssetsRepo.js    # asset repo paths, provenance files, raw URLs, git
 ├── imagePipeline.js      # thin saga orchestrator and retry routing
 ├── snippetBuilder.js     # substack, carousel, linkedin-post snippets

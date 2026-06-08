@@ -7,7 +7,9 @@ This repo is a monorepo with two separately installable extensions:
 - `OAT Table Tools` for markdown table promotion
 - `OAT Image Staging` for staged image placement
 
-For the workflow-level guide to what each tool is for and how to use it, see
+For the fastest image ledger walkthrough, see
+[docs/image-pipeline-quickstart.md](docs/image-pipeline-quickstart.md). For the
+workflow-level guide to what each tool is for and how to use it, see
 [docs/use-cases.md](docs/use-cases.md). For the working architecture target that
 reconciles these extensions with the content standards, see
 [docs/image-pipeline-architecture.md](docs/image-pipeline-architecture.md). For
@@ -53,19 +55,29 @@ Activity bar view:
 
 - `OAT Image Staging`
 
-Command:
+Commands:
 
 - `OAT Images: Refresh Image Panel`
+- `OAT Images: Intake URL`
+- `OAT Images: Intake Local File`
+- `OAT Images: Create Review Image Need`
+- `OAT Images: List Open Image Needs`
+- `OAT Images: List Staged Notebook Images`
+- `OAT Images: List Planned Image Placements`
+- `OAT Images: Prepare Planned Placement Run`
 
-The panel reads from the Google Sheet set in `oatImages.sheetId` and shows rows
-where column H is `staged`.
+The panel reads staged assets from the image ledger Worker when
+`oatImages.ledgerApiUrl` is configured. Without that setting, it falls back to
+the Google Sheet set in `oatImages.sheetId` and shows rows where column H is
+`staged`.
 
-Architecture target: move image staging state to Cloudflare D1 and retire the
-Google Sheet as an image workflow dependency. Google Sheets remain part of table
-promotion because the generated sheet is the reader-facing accessible data
-artifact.
+In this stack, the image ledger is backed by Cloudflare D1. Ledger-native image
+work can intake URL/local assets, create review image needs, plan placements,
+list planned placements, and prepare placement instructions. The final guarded
+command that executes file, Git, and editor side effects is still the remaining
+implementation gap.
 
-The panel can:
+The legacy sheet-backed panel can:
 
 1. Resolve thumbnails from `image_src`, direct image URLs, Unsplash, or page metadata
 2. Place images into the local images repo

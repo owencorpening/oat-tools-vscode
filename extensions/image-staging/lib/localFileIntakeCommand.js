@@ -70,7 +70,7 @@ async function intakeLocalFile({ vscode, db, ledgerWriter, assetLedger = ledger,
     vscode.window.showInformationMessage(`OAT: Staged local asset: ${asset.displayName}.`);
   } else {
     await vscode.env.clipboard.writeText(JSON.stringify({ asset }, null, 2));
-    vscode.window.showInformationMessage('OAT: D1 asset intake copied as JSON; configure a ledger writer to save it directly.');
+    vscode.window.showInformationMessage('OAT: Image notebook asset copied as JSON; configure a ledger writer to save it directly.');
   }
 
   return { asset };

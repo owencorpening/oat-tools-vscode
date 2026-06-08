@@ -15,14 +15,14 @@ function registerPlannedPlacementRunCommand(context, vscode, options = {}) {
 
 async function preparePlannedPlacementRun({ vscode, ledgerWriter, buildRunInput = buildPlacementRunInput } = {}) {
   if (!ledgerWriter || !ledgerWriter.listPlannedPlacements) {
-    vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl to prepare D1 placement runs.');
+    vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl to prepare image placement instructions.');
     return null;
   }
 
   const result = await ledgerWriter.listPlannedPlacements();
   const placements = result.placements || [];
   if (placements.length === 0) {
-    vscode.window.showInformationMessage('OAT: No planned D1 placements to prepare.');
+    vscode.window.showInformationMessage('OAT: No planned image placements to prepare.');
     return [];
   }
 
@@ -38,7 +38,7 @@ async function preparePlannedPlacementRun({ vscode, ledgerWriter, buildRunInput 
   });
 
   await vscode.env.clipboard.writeText(JSON.stringify(payload, null, 2));
-  vscode.window.showInformationMessage('OAT: Planned placement run payload copied as JSON.');
+  vscode.window.showInformationMessage('OAT: Placement instructions copied as JSON.');
   return payload;
 }
 

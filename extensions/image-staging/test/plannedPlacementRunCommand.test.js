@@ -42,13 +42,13 @@ async function testPrepareCopiesRunPayload() {
   assert.strictEqual(payload.asset.id, 'asset-1');
   assert.strictEqual(payload.placement.id, 'placement-1');
   assert.strictEqual(JSON.parse(copied[0]).asset.displayName, 'River Map');
-  assert.deepStrictEqual(messages.at(-1), ['info', 'OAT: Planned placement run payload copied as JSON.']);
+  assert.deepStrictEqual(messages.at(-1), ['info', 'OAT: Placement instructions copied as JSON.']);
 }
 
 async function testEmptyAndMissingWriterStates() {
   const messages = [];
   assert.strictEqual(await preparePlannedPlacementRun({ vscode: fakeVscode({ messages }) }), null);
-  assert.deepStrictEqual(messages[0], ['warning', 'OAT: Set oatImages.ledgerApiUrl to prepare D1 placement runs.']);
+  assert.deepStrictEqual(messages[0], ['warning', 'OAT: Set oatImages.ledgerApiUrl to prepare image placement instructions.']);
 
   const empty = await preparePlannedPlacementRun({
     vscode: fakeVscode({ messages }),

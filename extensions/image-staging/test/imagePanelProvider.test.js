@@ -90,7 +90,7 @@ async function testD1ActionsAreGuarded() {
   assert.strictEqual(warningMessages.length, 1);
   assert.match(warningMessages[0], /Open the target markdown draft/);
   assert.strictEqual(infoMessages.length, 1);
-  assert.match(infoMessages[0], /D1 discard is not wired/);
+  assert.match(infoMessages[0], /Notebook discard is not wired/);
 }
 
 async function testD1PlaceCreatesPlannedPlacement() {

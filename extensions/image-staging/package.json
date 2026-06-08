@@ -49,11 +49,11 @@
       },
       {
         "command": "oatImages.listStagedAssets",
-        "title": "OAT Images: List Staged D1 Assets"
+        "title": "OAT Images: List Staged Notebook Images"
       },
       {
         "command": "oatImages.listPlannedPlacements",
-        "title": "OAT Images: List Planned D1 Placements"
+        "title": "OAT Images: List Planned Image Placements"
       },
       {
         "command": "oatImages.preparePlannedPlacementRun",
@@ -86,7 +86,7 @@
         "oatImages.ledgerApiUrl": {
           "type": "string",
           "default": "",
-          "description": "Optional HTTP API base URL for writing D1 image pipeline records."
+          "description": "Optional HTTP API base URL for writing image notebook records."
         },
         "oatImages.ledgerApiToken": {
           "type": "string",

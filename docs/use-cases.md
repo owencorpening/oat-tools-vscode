@@ -4,6 +4,9 @@ This is the single workflow guide for the OAT VS Code tools. Use it to decide
 which extension to use, why that extension exists, and what steps to follow for
 the common publishing jobs.
 
+For the shortest image ledger walkthrough, start with
+[image-pipeline-quickstart.md](image-pipeline-quickstart.md).
+
 ## Tool Map
 
 | Tool | Use it when | Why it exists | Primary VS Code surface |
@@ -32,9 +35,10 @@ Both tools assume the content workflow has these pieces available:
 `OAT Table Tools` additionally requires `oatTables.workerUrl`, because table
 promotion calls the Cloudflare Worker that creates styled Google Sheets.
 
-`OAT Image Staging` currently reads from a Google Sheet, but the target
-architecture replaces the image staging sheet with a Cloudflare D1 asset ledger.
-Do not add new image workflow dependencies on Sheets.
+`OAT Image Staging` reads from the image ledger when `oatImages.ledgerApiUrl` is
+configured, and falls back to the legacy staging sheet otherwise. In this stack,
+the image ledger is backed by Cloudflare D1. Do not add new image workflow
+dependencies on Sheets.
 
 ## Use Case: Promote Draft Tables
 
@@ -78,9 +82,8 @@ OAT-generated table image.
 
 ## Use Case: Intake a Local or AI-Generated Image
 
-This is a pipeline requirement, not fully implemented in the current panel.
-Use it when the image starts outside the D1 asset ledger, especially in
-`~/Downloads`.
+Use `OAT Images: Intake Local File` when the image starts outside the asset
+ledger, especially in `~/Downloads`.
 
 Common sources:
 
@@ -91,53 +94,52 @@ Common sources:
 - A user-provided image that should be placed spontaneously.
 - A final-review image hunt triggered by a dense passage in the draft.
 
-Expected steps:
+Steps:
 
 1. Choose or detect the local image file.
 2. Infer a proposed image name and any metadata from the filename.
 3. Ask for missing provenance: source URL, creator or photographer, and license.
-4. Normalize the image into the same record shape as a D1 asset record.
-5. Move the image into the correct folder in the asset repo.
-6. Write `url.txt`, `license.txt`, and `photographer.txt`.
-7. Continue through the normal placement flow for Substack, carousel, or
-   LinkedIn handoff.
+4. Normalize the image into the same record shape as a ledger asset record.
+5. Save the asset to the ledger when `oatImages.ledgerApiUrl` is configured, or
+   copy the JSON payload for manual review.
+6. Continue through planned placement and local run preparation.
 
 Result:
 
 Images that did not come from the normal capture flow can still enter
-the publishing pipeline without losing provenance or leaving finished assets in
-`~/Downloads`.
+the publishing pipeline without losing provenance. The asset repo move and
+provenance file writes happen later, when the placement saga is executed.
 
 ## Use Case: Add an Image During Final Review
 
-This is a pipeline requirement, not fully implemented in the current panel.
-Use it when final review reveals that a section is too dense and needs a visual
-anchor before publication.
+Use `OAT Images: Create Review Image Need` when final review reveals that a
+section is too dense and needs a visual anchor before publication.
 
-Expected steps:
+Steps:
 
 1. Select the dense passage, image placeholder, or insertion point in the draft.
 2. Create an image need with a short reason, such as `visual break`,
    `concept diagram`, `map`, `sourced photo`, or `data figure`.
-3. Choose the intake path:
+3. Save the image need to the ledger when `oatImages.ledgerApiUrl` is
+   configured, or copy the JSON payload for manual review.
+4. Choose the intake path later:
    - Use an existing staged asset.
    - Search for and capture a new sourced image.
    - Use a local image from `~/Downloads`.
    - Use or generate an AI image.
    - Promote a markdown table if the need is actually tabular data.
-4. Capture or confirm provenance.
-5. Place the image through the normal Substack, carousel, or LinkedIn flow.
+5. Capture or confirm provenance, then create a planned placement.
 
 Result:
 
 Final-review visual gaps become tracked image records instead of ad hoc manual
-edits. The draft gets relief from dense text while D1 and the asset repo
+edits. The draft gets relief from dense text while the ledger and asset repo
 preserve source, license, and placement status.
 
 ## Use Case: Place a Staged Image in a Draft
 
 Use `OAT Image Staging` when an image has already been captured in the image
-ledger and is ready to appear in an article, carousel, or LinkedIn handoff.
+ledger and is ready to be planned for an article, carousel, or LinkedIn handoff.
 
 Steps:
 
@@ -147,31 +149,29 @@ Steps:
 4. Review the thumbnail, photographer, license, and URL for the image.
 5. Click `Place`.
 6. Choose the publishing target: `substack`, `carousel`, or `linkedin-post`.
-7. Confirm or enter the part number.
-8. Confirm or edit the image slug.
-9. Enter the figure number.
-10. Review the inserted snippet or copied LinkedIn handoff text.
+7. Enter the figure number or handoff label.
+8. Confirm the planned placement was recorded.
+9. Run `OAT Images: Prepare Planned Placement Run` and select the planned
+   placement.
+10. Review the copied placement instructions.
 
 What the tool does:
 
-- Reads the staging ledger and shows records where `status` is `staged`.
+- Reads ledger staged assets when `oatImages.ledgerApiUrl` is configured, otherwise
+  falls back to the legacy sheet-backed panel.
 - Resolves a thumbnail from `image_src`, a direct image URL, Unsplash, or page
   metadata.
-- Creates a folder in the asset repo for the placed image.
-- Stores source, photographer, and license metadata files next to the image.
-- Downloads the image when possible.
-- Creates a target-specific snippet.
-- Inserts the snippet into the active editor, or copies it to the clipboard when
-  the target requires manual placement.
-- Commits and pushes the new image files.
-- Marks the asset as `placed`, records `placed_in`, `placed_date`, and records
-  the target.
+- Creates a ledger `asset_placement` with `status = planned`.
+- Creates an `asset_saga` row for local execution.
+- Lists planned placements through `OAT Images: List Planned Image Placements`.
+- Copies placement instructions through `OAT Images: Prepare Planned Placement
+  Run`.
 
 Result:
 
-The draft or clipboard receives the right publishing snippet, the asset repo
-contains the placed asset and metadata, and the ledger records that the image has
-been handled.
+The ledger knows which asset should go where and has a saga ready to execute.
+The current command stops before writing files, committing Git changes, or
+editing the draft.
 
 ## Use Case: Prepare a LinkedIn Image Handoff
 
@@ -183,14 +183,15 @@ Steps:
 1. Open the `OAT Image Staging` panel.
 2. Click `Place` on the staged image.
 3. Choose `linkedin-post`.
-4. Enter the part number, slug, and figure number.
-5. Paste the copied handoff text wherever the LinkedIn post is being prepared.
-6. Attach the image manually in the LinkedIn editor.
+4. Enter the handoff label.
+5. Run `OAT Images: Prepare Planned Placement Run`.
+6. Use the copied placement instructions as the input for the local placement
+   saga once the guarded executor is wired.
 
 Result:
 
-The image is committed to the asset repo, attribution is copied in a compact
-handoff format, and the ledger is updated as placed for LinkedIn.
+The LinkedIn placement is tracked in the ledger as planned. Final hosting, attribution
+handoff text, and the placed status are completed by the local placement saga.
 
 ## Use Case: Discard an Image
 
@@ -231,11 +232,27 @@ Result:
 The panel reloads staged records and thumbnail previews from the configured
 ledger.
 
+## Image Ledger Commands
+
+Use these commands when `oatImages.ledgerApiUrl` points at the ledger Worker:
+
+- `OAT Images: Intake URL`
+- `OAT Images: Intake Local File`
+- `OAT Images: Create Review Image Need`
+- `OAT Images: List Open Image Needs`
+- `OAT Images: List Staged Notebook Images`
+- `OAT Images: List Planned Image Placements`
+- `OAT Images: Prepare Planned Placement Run`
+
+The prepare command copies placement instructions. It does not yet execute the
+file, Git, or editor side effects.
+
 ## Legacy Image Staging Sheet Columns
 
-The current image staging panel still expects `Sheet1` columns `A:L`. This is a
-migration detail, not the target architecture. New image pipeline work should use
-Cloudflare D1 records instead of sheet rows.
+When `oatImages.ledgerApiUrl` is not configured, the image staging panel can
+still fall back to the legacy sheet path and expects `Sheet1` columns `A:L`.
+This is a compatibility path, not the target architecture. New image pipeline
+work should use ledger records instead of sheet rows.
 
 | Column | Field |
 |--------|-------|
@@ -252,9 +269,9 @@ Cloudflare D1 records instead of sheet rows.
 | K | target |
 | L | image_src |
 
-Rows with `status` set to `staged` appear in the current panel. Placement
-updates `status`, `placed_in`, `placed_date`, and `target`. The D1 migration
-should import or mirror these fields, then retire the sheet dependency.
+Rows with `status` set to `staged` appear in the legacy panel. Legacy placement
+updates `status`, `placed_in`, `placed_date`, and `target`. The ledger-native path
+uses `asset`, `asset_placement`, and `asset_saga` records instead.
 
 ## Operational Checks
 
@@ -267,9 +284,9 @@ Use these quick checks when the workflow feels stuck:
 - If generated or placed images are not available through raw GitHub URLs,
   confirm the asset repo commit and push succeeded.
 - If the current image panel is empty, confirm the sheet ID and that rows use
-  `status = staged`. In the D1 target, confirm the ledger has staged records.
+  `status = staged`. In the ledger target, confirm the ledger has staged records.
 - If image thumbnails do not resolve, confirm `image_src`, the source URL, and
   the optional Unsplash access key.
 - If legacy sheet updates fail, confirm the service account credentials can
-  access the configured Google Sheet. In the D1 target, this failure mode goes
+  access the configured Google Sheet. In the ledger target, this failure mode goes
   away.

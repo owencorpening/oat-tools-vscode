@@ -54,6 +54,16 @@ Endpoints:
 - `GET /assets/staged`
 - `GET /placements/planned`
 
+VS Code commands that use this API:
+
+- `OAT Images: Intake URL`
+- `OAT Images: Intake Local File`
+- `OAT Images: Create Review Image Need`
+- `OAT Images: List Open Image Needs`
+- `OAT Images: List Staged Notebook Images`
+- `OAT Images: List Planned Image Placements`
+- `OAT Images: Prepare Planned Placement Run`
+
 Set `LEDGER_API_TOKEN` as a Worker secret when the API should require bearer
 authorization. Replace the placeholder `database_id` in `worker/wrangler.jsonc`
 with the ID returned by `wrangler d1 create`.

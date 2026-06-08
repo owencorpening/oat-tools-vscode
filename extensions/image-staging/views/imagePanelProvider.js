@@ -154,13 +154,13 @@ class ImagePanelProvider {
 
   async _handleD1Place(image) {
     if (!this._ledgerWriter || !this._ledgerWriter.savePlacement) {
-      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before creating D1 placements.');
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before creating notebook placements.');
       return null;
     }
 
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
-      vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a D1 asset.');
+      vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a notebook image.');
       return null;
     }
 
@@ -210,7 +210,7 @@ class ImagePanelProvider {
 
   async _handleDiscard(image) {
     if (image && image.source === 'd1') {
-      vscode.window.showInformationMessage('OAT: D1 discard is not wired yet; use the ledger API or wait for the next panel action.');
+      vscode.window.showInformationMessage('OAT: Notebook discard is not wired yet; use the ledger API or wait for the next panel action.');
       return;
     }
 

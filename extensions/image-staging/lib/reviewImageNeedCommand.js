@@ -58,7 +58,7 @@ async function createReviewImageNeed({ vscode, db, ledgerWriter, assetLedger = l
     vscode.window.showInformationMessage(`OAT: Created image need: ${reason}.`);
   } else {
     await vscode.env.clipboard.writeText(JSON.stringify({ contentDraft: draft, imageNeed: need }, null, 2));
-    vscode.window.showInformationMessage('OAT: D1 image need copied as JSON; configure a ledger writer to save it directly.');
+    vscode.window.showInformationMessage('OAT: Image notebook need copied as JSON; configure a ledger writer to save it directly.');
   }
 
   return { contentDraft: draft, imageNeed: need };
