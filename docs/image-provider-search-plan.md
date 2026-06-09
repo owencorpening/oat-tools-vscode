@@ -138,13 +138,16 @@ Normalize every result into:
 }
 ```
 
-The extension should not need to know provider quirks. It asks the Worker for
-results, displays normalized records, and stages the selected record.
+The extension should not need to know remote provider quirks. It asks the Worker
+for remote results, displays normalized records, and stages the selected record.
+Local providers such as Downloads run extension-side because the Worker cannot
+read the user's filesystem.
 
 ## Provider Tiers
 
 Phase 1: finish the smooth path with already relevant providers.
 
+- Downloads as a local provider
 - Unsplash
 - Pexels
 - Pixabay
@@ -165,6 +168,28 @@ Adding providers should be easy once the adapter boundary exists. The hard part
 is not usually the HTTP call; it is normalizing license, creator, source page,
 direct image URL, rate limits, and search quality into a record the author can
 trust.
+
+## Downloads Local Provider
+
+Downloads is implemented as an extension-side provider because VS Code can read
+the local filesystem and the Worker cannot.
+
+Behavior:
+
+- Scan `~/Downloads` for likely image files: PNG, JPG, JPEG, WEBP, GIF, and SVG.
+- Filter by the sidebar search query against filenames.
+- Ignore unrelated files such as installers, spreadsheets, markdown drafts, and
+  personal documents.
+- Infer filename hints such as tool, timestamp, subject, and style.
+- Return local provider results with `provider: "downloads"`, `sourcePath`,
+  `sourceName`, proposed metadata, and `provenanceConfidence: "filename-hint"`.
+- Compute `contentHash` only when the author clicks `Stage`.
+- Stage through the same D1 `asset` shape as manual local-file intake.
+- Default staged Downloads results to `needs-provenance` unless source, creator,
+  and license are confirmed.
+
+This preserves the manual `OAT Images: Intake Local File` command while making
+Downloads searchable from the same sidebar flow as Pexels.
 
 ## Pexels First Implementation
 

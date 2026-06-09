@@ -43,6 +43,9 @@ async function intakeLocalFile({ vscode, db, ledgerWriter, assetLedger = ledger,
   const license = await vscode.window.showInputBox({
     prompt: 'License / rights status'
   });
+  const attribution = await vscode.window.showInputBox({
+    prompt: 'Attribution string (optional)'
+  });
   const intakeSection = await vscode.window.showInputBox({
     prompt: 'Intake section (optional)',
     placeHolder: 'water-series/part-09'
@@ -55,6 +58,7 @@ async function intakeLocalFile({ vscode, db, ledgerWriter, assetLedger = ledger,
     sourceUrl: emptyToUndefined(sourceUrl),
     photographer: emptyToUndefined(photographer),
     license: emptyToUndefined(license),
+    attribution: emptyToUndefined(attribution),
     intakeSection: emptyToUndefined(intakeSection)
   };
   if (sourceKind === 'ai-generated' && !assetInput.photographer) {

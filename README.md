@@ -68,9 +68,10 @@ Commands:
 - `OAT Images: List Planned Image Placements`
 - `OAT Images: Prepare Planned Placement Run`
 
-The panel reads staged assets from the image ledger Worker when
-`oatImages.ledgerApiUrl` is configured. The image pipeline is clean-slate D1;
-it does not use Google Sheets for staging, placement, or discard state.
+The panel can search likely image files in local `~/Downloads` from VS Code. It
+reads staged assets from the image ledger Worker and stages selected results
+when `oatImages.ledgerApiUrl` is configured. The image pipeline is clean-slate
+D1; it does not use Google Sheets for staging, placement, or discard state.
 
 In this stack, the image ledger is backed by Cloudflare D1. Ledger-native image
 work can intake URL/local assets, create review image needs, plan placements,

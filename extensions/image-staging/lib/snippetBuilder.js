@@ -1,13 +1,13 @@
 'use strict';
 
-function buildSnippet({ target, imageUrl, displayName, name, figNum, figureNumber, attribution, photographer, license }) {
+function buildSnippet({ target, imageUrl, displayName, name, figNum, figureNumber, caption, attribution, photographer, license }) {
   const desc = humanize(displayName || name);
-  const attr = attribution || `Image by ${photographer}, ${license}.`;
+  const attr = caption || attribution || `Image by ${photographer}, ${license}.`;
   const figure = figureNumber || figNum;
 
   switch (target) {
     case 'substack':
-      return `<figure>\n  <img src="${imageUrl}" width="700" alt="${desc}">\n  <figcaption>Figure ${figure}: ${attr}</figcaption>\n</figure>`;
+      return `<figure>\n  <img src="${imageUrl}" width="700" alt="${desc}">\n  <figcaption>${figureCaption({ figure, caption: attr })}</figcaption>\n</figure>`;
     case 'carousel':
       return `![bg left:40%](${imageUrl})`;
     case 'linkedin-post':
@@ -15,6 +15,12 @@ function buildSnippet({ target, imageUrl, displayName, name, figNum, figureNumbe
     default:
       return imageUrl;
   }
+}
+
+function figureCaption({ figure, caption }) {
+  const clean = String(caption || '').trim();
+  if (/^Figure\s+\d+:/i.test(clean)) return clean;
+  return `Figure ${figure}: ${clean}`;
 }
 
 function humanize(s) {
@@ -26,5 +32,6 @@ function humanize(s) {
 
 module.exports = {
   buildSnippet,
+  figureCaption,
   humanize
 };

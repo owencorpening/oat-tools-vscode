@@ -1,6 +1,11 @@
 'use strict';
 const vscode = require('vscode');
 const crypto = require('crypto');
+const os = require('os');
+const path = require('path');
+const downloadsProvider = require('../lib/downloadsProvider');
+const { placeAsset } = require('../lib/imagePipeline');
+const { imagesRepoPath } = require('../lib/plannedPlacementRunCommand');
 const {
   buildContentDraftRecord,
   buildDraftLocation
@@ -9,16 +14,31 @@ const {
 class ImagePanelProvider {
   static viewId = 'oatImages.panel';
 
-  constructor(context, { ledgerWriter } = {}) {
+  constructor(context, {
+    ledgerWriter,
+    localDownloadsProvider = downloadsProvider,
+    runPlacement = placeAsset,
+    getImagesRepoPath = imagesRepoPath,
+    writeSnippet = writeSnippetToActiveEditor
+  } = {}) {
     this._context = context;
     this._ledgerWriter = ledgerWriter;
+    this._downloadsProvider = localDownloadsProvider;
+    this._runPlacement = runPlacement;
+    this._getImagesRepoPath = getImagesRepoPath;
+    this._writeSnippet = writeSnippet;
     this._view = null;
   }
 
   // Called by VS Code when the panel becomes visible
   resolveWebviewView(webviewView) {
     this._view = webviewView;
-    webviewView.webview.options = { enableScripts: true };
+    webviewView.webview.options = {
+      enableScripts: true,
+      ...(vscode.Uri?.file ? { localResourceRoots: [
+        vscode.Uri.file(path.join(os.homedir(), 'Downloads'))
+      ] } : {})
+    };
     webviewView.webview.html = this._html(webviewView.webview);
 
     // Proactive ping — confirms extension→webview channel works
@@ -60,13 +80,18 @@ class ImagePanelProvider {
   }
 
   async _loadProviders() {
-    if (!this._ledgerWriter || !this._ledgerWriter.listImageProviders) return;
+    const providers = [{ id: 'downloads', label: 'Downloads' }];
+    if (!this._ledgerWriter || !this._ledgerWriter.listImageProviders) {
+      this._send({ type: 'providers', providers });
+      return;
+    }
 
     try {
       const result = await this._ledgerWriter.listImageProviders();
-      this._send({ type: 'providers', providers: Array.isArray(result?.providers) ? result.providers : [] });
+      providers.push(...(Array.isArray(result?.providers) ? result.providers : []));
+      this._send({ type: 'providers', providers });
     } catch {
-      this._send({ type: 'providers', providers: [] });
+      this._send({ type: 'providers', providers });
     }
   }
 
@@ -82,8 +107,8 @@ class ImagePanelProvider {
   }
 
   async _handleProviderSearch({ query, providers } = {}) {
-    if (!this._ledgerWriter || !this._ledgerWriter.searchImageProviders) {
-      this._send({ type: 'error', message: 'Set oatImages.ledgerApiUrl to search provider images.' });
+    if (!this._downloadsProvider?.searchDownloads && !this._ledgerWriter?.searchImageProviders) {
+      this._send({ type: 'error', message: 'Set oatImages.ledgerApiUrl or enable a local provider to search images.' });
       return null;
     }
 
@@ -93,22 +118,42 @@ class ImagePanelProvider {
       return { query: cleanQuery, results: [] };
     }
 
-    const result = await this._ledgerWriter.searchImageProviders({
-      query: cleanQuery,
-      providers: providers && providers.length ? providers : ['pexels'],
-      perPage: 12
-    });
-    const results = Array.isArray(result?.results) ? result.results : [];
+    const requestedProviders = providers && providers.length ? providers : ['pexels', 'downloads'];
+    const results = [];
+
+    if (requestedProviders.includes('downloads') && this._downloadsProvider?.searchDownloads) {
+      const localResult = await this._downloadsProvider.searchDownloads({ query: cleanQuery, limit: 12 });
+      results.push(...this._prepareProviderResultsForPanel(localResult?.results));
+    }
+
+    if (requestedProviders.includes('pexels') && this._ledgerWriter?.searchImageProviders) {
+      try {
+        const result = await this._ledgerWriter.searchImageProviders({
+          query: cleanQuery,
+          providers: ['pexels'],
+          perPage: 12
+        });
+        results.push(...this._prepareProviderResultsForPanel(result?.results));
+      } catch (err) {
+        this._send({ type: 'providerNotice', message: `Pexels search skipped: ${err.message}` });
+      }
+    }
+
     this._send({ type: 'providerResults', query: cleanQuery, results });
     return { query: cleanQuery, results };
   }
 
   async _handleStageProviderImage(result) {
+    if (!result || !result.provider) return null;
+
+    if (result.provider === 'downloads') {
+      return this._handleStageDownloadsImage(result);
+    }
+
     if (!this._ledgerWriter || !this._ledgerWriter.stageProviderImage) {
       vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before staging provider images.');
       return null;
     }
-    if (!result || !result.provider) return null;
 
     const response = await this._ledgerWriter.stageProviderImage({
       provider: result.provider,
@@ -123,42 +168,61 @@ class ImagePanelProvider {
     return response;
   }
 
+  async _handleStageDownloadsImage(result) {
+    if (!this._ledgerWriter || !this._ledgerWriter.saveAsset) {
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before staging Downloads images.');
+      return null;
+    }
+    if (!this._downloadsProvider || !this._downloadsProvider.stageDownloadsResult) return null;
+
+    const asset = await this._downloadsProvider.stageDownloadsResult(result);
+    await this._ledgerWriter.saveAsset({ asset });
+
+    vscode.window.showInformationMessage(`OAT: Staged ${asset.displayName || result.title || 'Downloads image'}.`);
+    this._send({ type: 'providerStaged', asset });
+    await this._loadStaged();
+    return { asset };
+  }
+
   // ── Place ─────────────────────────────────────────────────────────────────
 
   async _handlePlace(image) {
-    if (!this._ledgerWriter || !this._ledgerWriter.savePlacement) {
-      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before creating notebook placements.');
-      return null;
-    }
-
     const editor = vscode.window.activeTextEditor;
     if (!editor) {
       vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a notebook image.');
       return null;
     }
 
-    const target = await vscode.window.showQuickPick(
-      ['substack', 'carousel', 'linkedin-post'],
-      { placeHolder: 'Publishing target' }
-    );
-    if (!target) return null;
+    if (!isMarkdownDraft(editor)) {
+      vscode.window.showWarningMessage('OAT: Open a markdown draft before placing a notebook image.');
+      return null;
+    }
 
-    const defaultFigureNumber = nextFigureNumberHint(editor);
-    const figureNumber = await vscode.window.showInputBox({
-      prompt: target === 'substack' ? 'Figure number' : 'Figure number or handoff label',
-      value: defaultFigureNumber,
-      validateInput: value => target === 'substack' && !String(value || '').trim() ? 'Required for Substack' : null
-    });
-    if (figureNumber === undefined) return null;
+    const target = placementTargetFromEditor(editor);
+    if (!target) {
+      vscode.window.showWarningMessage('OAT: Open a Substack draft under substack-ideas or a carousel draft ending in carousel.md before placing.');
+      return null;
+    }
+
+    if (!hasDirectPlacementLedgerMethods(this._ledgerWriter)) {
+      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before placing figures.');
+      return null;
+    }
 
     const contentDraft = buildContentDraftRecord({ vscode, editor });
+    const figureNumber = await nextFigureNumber({ editor, ledgerWriter: this._ledgerWriter, contentDraftId: contentDraft.id });
+    const caption = captionSuggestionForImage(image);
+
     const placement = {
       id: placementId({ assetId: image.id, contentDraftId: contentDraft.id, target, figureNumber }),
       assetId: image.id,
       contentDraftId: contentDraft.id,
       target,
-      figureNumber: String(figureNumber || '').trim() || undefined,
-      draftLocation: buildDraftLocation(editor),
+      figureNumber,
+      draftLocation: {
+        ...buildDraftLocation(editor),
+        caption
+      },
       snippetFormat: snippetFormatForTarget(target),
       status: 'planned'
     };
@@ -173,10 +237,23 @@ class ImagePanelProvider {
     };
 
     await this._ledgerWriter.savePlacement({ contentDraft, placement, saga });
-    vscode.window.showInformationMessage(`OAT: Planned ${target} placement for ${image.displayName || image.name}.`);
+
+    const placed = await this._runPlacement({
+      db: {},
+      sagaId: saga.id,
+      repoPath: this._getImagesRepoPath(vscode),
+      asset: image,
+      placement,
+      ledger: this._ledgerWriter,
+      download: true,
+      commit: true,
+      writeSnippet: payload => this._writeSnippet(vscode, payload)
+    });
+
+    vscode.window.showInformationMessage(`OAT: Placed Figure ${figureNumber} for ${image.displayName || image.name}.`);
     await this._loadStaged();
 
-    return { contentDraft, placement, saga };
+    return { contentDraft, placement, saga, placed };
   }
 
   // ── Discard ───────────────────────────────────────────────────────────────
@@ -204,6 +281,32 @@ class ImagePanelProvider {
     if (this._view) this._view.webview.postMessage(msg);
   }
 
+  _prepareProviderResultsForPanel(results) {
+    if (!Array.isArray(results)) return [];
+    return results.map(result => this._prepareProviderResultForPanel(result));
+  }
+
+  _prepareProviderResultForPanel(result) {
+    if (
+      !result ||
+      result.provider !== 'downloads' ||
+      !result.sourcePath ||
+      !this._view?.webview?.asWebviewUri ||
+      !vscode.Uri?.file
+    ) {
+      return {
+        ...result,
+        provenance: buildProvenanceForPanel(result)
+      };
+    }
+
+    return {
+      ...result,
+      previewUrl: this._view.webview.asWebviewUri(vscode.Uri.file(result.sourcePath)).toString(),
+      provenance: buildProvenanceForPanel(result)
+    };
+  }
+
   // ── Webview HTML ──────────────────────────────────────────────────────────
 
   _html(webview) {
@@ -213,7 +316,7 @@ class ImagePanelProvider {
 <head>
 <meta charset="UTF-8">
 <meta http-equiv="Content-Security-Policy"
-  content="default-src 'none'; img-src https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
+  content="default-src 'none'; img-src ${webview.cspSource} https: data:; style-src 'unsafe-inline'; script-src 'nonce-${nonce}';">
 
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -270,20 +373,66 @@ body {
 .search-status { padding: 8px; opacity: 0.6; font-size: 11px; }
 .error { color: var(--vscode-errorForeground); }
 .card { border-bottom: 1px solid var(--vscode-panel-border); }
-.thumb-wrap {
-  width: 100%; height: 130px; overflow: hidden;
-  background: var(--vscode-input-background);
+.card-content {
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr);
+  gap: 8px;
+  padding: 8px;
 }
-.thumb { width: 100%; height: 100%; object-fit: cover; display: block; }
+.thumb-wrap {
+  width: 112px; height: 112px; overflow: hidden;
+  background: var(--vscode-input-background);
+  display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--vscode-panel-border);
+  position: relative;
+  z-index: 0;
+}
+.thumb-wrap:hover {
+  overflow: visible;
+  z-index: 2;
+}
+.thumb {
+  width: 100%; height: 100%; object-fit: contain; display: block;
+  background: var(--vscode-input-background);
+  transition: transform 140ms ease, box-shadow 140ms ease;
+  transform-origin: center;
+}
+.thumb-wrap:hover .thumb {
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.32);
+  transform: scale(1.45);
+}
 .no-thumb {
   width: 100%; height: 100%;
   display: flex; align-items: center; justify-content: center;
   opacity: 0.4; font-size: 11px;
 }
-.meta { padding: 6px 8px 4px; }
-.photographer { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { min-width: 0; padding: 0; }
+.meta-title { font-weight: 600; font-size: 12px; line-height: 1.25; overflow-wrap: anywhere; }
+.photographer { font-size: 11px; opacity: 0.68; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .license { font-size: 11px; opacity: 0.65; margin-top: 1px; }
 .url-line { font-size: 10px; opacity: 0.45; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.provenance {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  margin-top: 6px;
+}
+.prov-pill {
+  max-width: 100%;
+  padding: 2px 5px;
+  border: 1px solid var(--vscode-badge-background, var(--vscode-panel-border));
+  border-radius: 3px;
+  color: var(--vscode-foreground);
+  background: color-mix(in srgb, var(--vscode-badge-background, transparent) 18%, transparent);
+  font-size: 10px;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.prov-pill-warning {
+  border-color: var(--vscode-inputValidation-warningBorder, var(--vscode-panel-border));
+  background: color-mix(in srgb, var(--vscode-inputValidation-warningBackground, transparent) 35%, transparent);
+}
+.prov-label { opacity: 0.72; }
 .actions { padding: 5px 8px 8px; display: flex; gap: 6px; }
 .btn {
   flex: 1; padding: 4px 0; border: none; border-radius: 3px;
@@ -305,6 +454,10 @@ body {
   color: var(--vscode-button-secondaryForeground);
 }
 .btn-discard:hover { background: var(--vscode-button-secondaryHoverBackground, #555); }
+@media (max-width: 285px) {
+  .card-content { grid-template-columns: 1fr; }
+  .thumb-wrap { width: 100%; height: 160px; }
+}
 </style>
 </head>
 <body>
@@ -313,7 +466,7 @@ body {
   <button class="refresh-btn" id="refreshBtn" title="Refresh">↻</button>
 </div>
 <form class="searchbar" id="searchForm">
-  <input class="search-input" id="searchInput" type="search" placeholder="Search Pexels">
+  <input class="search-input" id="searchInput" type="search" placeholder="Search Pexels + Downloads">
   <button class="search-btn" type="submit">Search</button>
 </form>
 <div id="searchStatus" class="search-status" style="display:none"></div>
@@ -325,7 +478,7 @@ body {
 const vscode = acquireVsCodeApi();
 let images = [];
 let providerResults = [];
-let availableProviders = [{ id: 'pexels', label: 'Pexels' }];
+let availableProviders = [{ id: 'downloads', label: 'Downloads' }];
 
 document.getElementById('refreshBtn').addEventListener('click', () => {
   document.getElementById('status').textContent = 'Loading…';
@@ -342,8 +495,11 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   if (!query) return;
   providerResults = [];
   renderProviderResults('Searching…');
-  vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
+  vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads', 'pexels'] });
 });
+
+document.getElementById('results').addEventListener('click', handleCardAction);
+document.getElementById('list').addEventListener('click', handleCardAction);
 
 let _timeoutId = null;
 
@@ -363,6 +519,8 @@ window.addEventListener('message', e => {
     renderProviderResults(providerResults.length ? '' : 'No provider results.');
   } else if (msg.type === 'providerStaged') {
     renderProviderResults('Staged.');
+  } else if (msg.type === 'providerNotice') {
+    renderProviderResults(msg.message || '');
   } else if (msg.type === 'error') {
     clearTimeout(_timeoutId);
     document.getElementById('status').textContent = '⚠ ' + msg.message;
@@ -376,10 +534,16 @@ window.addEventListener('message', e => {
 function renderProviderAvailability() {
   const input = document.getElementById('searchInput');
   const button = document.querySelector('.search-btn');
-  const enabled = availableProviders.some(provider => provider.id === 'pexels');
+  const enabled = availableProviders.length > 0;
   input.disabled = !enabled;
   button.disabled = !enabled;
-  input.placeholder = enabled ? 'Search Pexels' : 'Pexels unavailable';
+  input.placeholder = enabled ? providerPlaceholder() : 'No providers available';
+}
+
+function providerPlaceholder() {
+  const names = availableProviders.map(provider => provider.label || provider.id);
+  if (names.length === 1) return 'Search ' + names[0];
+  return 'Search ' + names.join(' + ');
 }
 
 function renderProviderResults(message) {
@@ -400,19 +564,20 @@ function renderProviderResults(message) {
   }
 
   results.innerHTML = '<div class="section-title">Provider Results</div>' + providerResults.map((img, i) => {
-    const thumbHtml = img.thumbnailUrl || img.imageSrc
-      ? '<img class="thumb" src="' + esc(img.thumbnailUrl || img.imageSrc) + '" alt="" loading="lazy">'
+    const previewSrc = img.previewUrl || img.thumbnailUrl || img.imageSrc;
+    const thumbHtml = previewSrc
+      ? '<img class="thumb" src="' + esc(previewSrc) + '" alt="" loading="lazy">'
       : '<div class="no-thumb">No preview</div>';
     return (
       '<div class="card">' +
-        '<div class="thumb-wrap">' + thumbHtml + '</div>' +
-        '<div class="meta">' +
-          '<div class="photographer">' + esc(img.photographer || '(no photographer)') + '</div>' +
-          '<div class="license">'      + esc(img.license      || '')                  + '</div>' +
-          '<div class="url-line">'     + esc(img.sourceUrl    || '')                  + '</div>' +
+        '<div class="card-content">' +
+          '<div class="thumb-wrap">' + thumbHtml + '</div>' +
+          '<div class="meta">' +
+            renderImageMeta(img) +
+          '</div>' +
         '</div>' +
         '<div class="actions">' +
-          '<button class="btn btn-stage" data-i="' + i + '">Stage</button>' +
+          '<button class="btn btn-stage" type="button" data-action="stage" data-i="' + i + '">Stage</button>' +
         '</div>' +
       '</div>'
     );
@@ -421,11 +586,6 @@ function renderProviderResults(message) {
   results.querySelectorAll('.thumb').forEach(img => {
     img.addEventListener('error', function() {
       this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
-    });
-  });
-  results.querySelectorAll('.btn-stage').forEach(btn => {
-    btn.addEventListener('click', function() {
-      vscode.postMessage({ type: 'stageProviderImage', result: providerResults[+this.dataset.i] });
     });
   });
 }
@@ -447,20 +607,21 @@ function render() {
   status.style.display = 'none';
   count.textContent = images.length + ' staged';
   list.innerHTML = '<div class="section-title">Staged Images</div>' + images.map((img, i) => {
-    const thumbHtml = img.thumbUrl
-      ? '<img class="thumb" src="' + esc(img.thumbUrl) + '" alt="" loading="lazy">'
+    const previewSrc = img.previewUrl || img.thumbUrl;
+    const thumbHtml = previewSrc
+      ? '<img class="thumb" src="' + esc(previewSrc) + '" alt="" loading="lazy">'
       : '<div class="no-thumb">No preview</div>';
     return (
       '<div class="card">' +
-        '<div class="thumb-wrap">' + thumbHtml + '</div>' +
-        '<div class="meta">' +
-          '<div class="photographer">' + esc(img.photographer || '(no photographer)') + '</div>' +
-          '<div class="license">'      + esc(img.license      || '')                  + '</div>' +
-          '<div class="url-line">'     + esc(img.url          || '')                  + '</div>' +
+        '<div class="card-content">' +
+          '<div class="thumb-wrap">' + thumbHtml + '</div>' +
+          '<div class="meta">' +
+            renderImageMeta(img) +
+          '</div>' +
         '</div>' +
         '<div class="actions">' +
-          '<button class="btn btn-place"   data-i="' + i + '">Place</button>' +
-          '<button class="btn btn-discard" data-i="' + i + '">Discard</button>' +
+          '<button class="btn btn-place" type="button" data-action="place" data-i="' + i + '">Place Figure</button>' +
+          '<button class="btn btn-discard" type="button" data-action="discard" data-i="' + i + '">Discard</button>' +
         '</div>' +
       '</div>'
     );
@@ -471,16 +632,55 @@ function render() {
       this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
     });
   });
-  list.querySelectorAll('.btn-place').forEach(btn => {
-    btn.addEventListener('click', function() {
-      vscode.postMessage({ type: 'place', image: images[+this.dataset.i] });
-    });
-  });
-  list.querySelectorAll('.btn-discard').forEach(btn => {
-    btn.addEventListener('click', function() {
-      vscode.postMessage({ type: 'discard', image: images[+this.dataset.i] });
-    });
-  });
+}
+
+function handleCardAction(event) {
+  const button = event.target.closest('button[data-action]');
+  if (!button) return;
+
+  const index = Number(button.dataset.i);
+  if (!Number.isInteger(index) || index < 0) return;
+
+  if (button.dataset.action === 'stage') {
+    vscode.postMessage({ type: 'stageProviderImage', result: providerResults[index] });
+  } else if (button.dataset.action === 'place') {
+    vscode.postMessage({ type: 'place', image: images[index] });
+  } else if (button.dataset.action === 'discard') {
+    vscode.postMessage({ type: 'discard', image: images[index] });
+  }
+}
+
+function renderImageMeta(img) {
+  const title = img.title || img.displayName || img.name || img.sourceName || '(untitled image)';
+  const creator = img.photographer ? '<div class="photographer">' + esc(img.photographer) + '</div>' : '';
+  const source = img.sourceUrl || img.url || img.imageSrc || img.sourcePath || '';
+  const sourceLine = source ? '<div class="url-line">' + esc(source) + '</div>' : '';
+  return (
+    '<div class="meta-title">' + esc(title) + '</div>' +
+    creator +
+    renderProvenance(img.provenance || fallbackProvenance(img)) +
+    sourceLine
+  );
+}
+
+function renderProvenance(items) {
+  if (!items || items.length === 0) return '';
+  return '<div class="provenance">' + items.map(item => {
+    const toneClass = item.tone === 'warning' ? ' prov-pill-warning' : '';
+    return (
+      '<span class="prov-pill' + toneClass + '" title="' + esc(item.label + ': ' + item.value) + '">' +
+        '<span class="prov-label">' + esc(item.label) + ':</span> ' + esc(item.value) +
+      '</span>'
+    );
+  }).join('') + '</div>';
+}
+
+function fallbackProvenance(img) {
+  return [
+    { label: 'Source', value: img.provider || img.sourceName || 'unknown', tone: img.provider || img.sourceName ? undefined : 'warning' },
+    { label: img.license ? 'License' : 'Rights', value: img.license || 'unknown', tone: img.license ? undefined : 'warning' },
+    { label: 'Status', value: img.status || 'unknown', tone: img.status ? undefined : 'warning' }
+  ];
 }
 
 function esc(s) {
@@ -506,16 +706,83 @@ _timeoutId = setTimeout(() => {
   }
 }
 
-module.exports = { ImagePanelProvider };
+module.exports = { ImagePanelProvider, placementTargetFromDraftPath };
+
+function isMarkdownDraft(editor) {
+  return /\.md$/i.test(editor?.document?.uri?.fsPath || '');
+}
+
+function placementTargetFromEditor(editor) {
+  return placementTargetFromDraftPath(editor?.document?.uri?.fsPath);
+}
+
+function placementTargetFromDraftPath(draftPath) {
+  const normalized = String(draftPath || '').replace(/\\/g, '/').toLowerCase();
+  const segments = normalized.split('/').filter(Boolean);
+  const fileName = segments[segments.length - 1] || '';
+
+  if (/carousel\.md$/.test(fileName)) return 'carousel';
+  if (segments.includes('substack-ideas')) return 'substack';
+  return null;
+}
+
+async function nextFigureNumber({ editor, ledgerWriter, contentDraftId } = {}) {
+  const numbers = figureNumbersFromText(editor?.document?.getText?.() || '');
+
+  if (ledgerWriter?.listPlannedPlacements && contentDraftId) {
+    try {
+      const result = await ledgerWriter.listPlannedPlacements({ contentDraftId });
+      for (const placement of result?.placements || []) {
+        const value = Number(placement.figure_number || placement.figureNumber);
+        if (Number.isInteger(value) && value > 0) numbers.push(value);
+      }
+    } catch {
+      // Draft text still gives a deterministic local figure hint.
+    }
+  }
+
+  return String(numbers.length ? Math.max(...numbers) + 1 : 1);
+}
+
+function figureNumbersFromText(text = '') {
+  const matches = String(text).match(/Figure\s+(\d+)/gi) || [];
+  return matches
+    .map(match => Number((match.match(/\d+/) || [])[0]))
+    .filter(value => Number.isInteger(value) && value > 0);
+}
+
+function captionSuggestionForImage(image = {}) {
+  const title = image.title || image.displayName || image.name || image.sourceName || 'Untitled image';
+  const parts = [title];
+
+  if (image.attribution) {
+    parts.push(image.attribution);
+  } else {
+    const rights = [];
+    if (image.photographer) rights.push(`image by ${image.photographer}`);
+    if (image.license) rights.push(image.license);
+    if (rights.length) parts.push(rights.join(', '));
+  }
+
+  const origin = sourceDomain(image.sourceUrl || image.url || image.imageSrc);
+  if (origin) parts.push(`source: ${origin}`);
+
+  return parts
+    .map(part => String(part || '').trim())
+    .filter(Boolean)
+    .join('. ')
+    .replace(/\.+$/g, '') + '.';
+}
 
 function normalizeD1AssetForPanel(asset) {
   const imageSrc = asset.image_src || asset.imageSrc || asset.raw_asset_url || asset.rawAssetUrl || '';
   const sourceUrl = asset.source_url || asset.sourceUrl || '';
   const rawAssetUrl = asset.raw_asset_url || asset.rawAssetUrl || '';
 
-  return {
+  const image = {
     source: 'd1',
     id: asset.id,
+    slug: asset.slug || '',
     status: asset.status,
     name: asset.slug || asset.display_name || asset.displayName || asset.source_name || asset.sourceName || '',
     displayName: asset.display_name || asset.displayName || asset.slug || '',
@@ -532,6 +799,103 @@ function normalizeD1AssetForPanel(asset) {
     sourceUrl,
     sourceName: asset.source_name || asset.sourceName || ''
   };
+  image.provenance = buildProvenanceForPanel(image);
+  return image;
+}
+
+function buildProvenanceForPanel(record = {}) {
+  const items = [];
+  const sourceKind = record.sourceKind || sourceKindFromRecord(record);
+  const sourceLabel = sourceLabelFor(record, sourceKind);
+  items.push({ label: 'Source', value: sourceLabel.value, tone: sourceLabel.tone });
+
+  const origin = sourceDomain(record.sourceUrl || record.url || record.imageSrc) ||
+    record.sourceName ||
+    fileNameFromPath(record.sourcePath);
+  items.push({ label: 'Origin', value: origin || 'unknown', tone: origin ? undefined : 'warning' });
+
+  if (record.photographer) {
+    items.push({ label: 'Creator', value: record.photographer });
+  }
+
+  if (record.attribution) {
+    items.push({ label: 'Attribution', value: record.attribution });
+  }
+
+  items.push({
+    label: record.license ? 'License' : 'Rights',
+    value: record.license || 'unknown',
+    tone: record.license ? undefined : 'warning'
+  });
+
+  if (record.status) {
+    items.push({
+      label: 'Status',
+      value: statusLabel(record.status),
+      tone: record.status === 'needs-provenance' ? 'warning' : undefined
+    });
+  }
+
+  if (record.proposedTool) {
+    items.push({ label: 'Tool', value: record.proposedTool });
+  }
+  if (record.provenanceConfidence) {
+    items.push({ label: 'Hint', value: provenanceConfidenceLabel(record.provenanceConfidence) });
+  }
+
+  return items;
+}
+
+function sourceKindFromRecord(record = {}) {
+  if (record.provider === 'downloads') return 'downloads';
+  if (record.sourcePath) return 'local-file';
+  if (record.provider) return record.provider;
+  return '';
+}
+
+function sourceLabelFor(record = {}, sourceKind = '') {
+  switch (sourceKind) {
+    case 'ai-generated':
+      return { value: 'AI generated' };
+    case 'downloads':
+      return { value: 'Downloads' };
+    case 'user-provided':
+      return { value: 'User provided' };
+    case 'local-file':
+      return { value: 'Local file' };
+    default:
+      if (record.provider) return { value: titleCase(record.provider) };
+      if (record.sourceUrl || record.url || record.imageSrc) return { value: 'Web' };
+      return { value: 'unknown', tone: 'warning' };
+  }
+}
+
+function statusLabel(status = '') {
+  return String(status).replace(/-/g, ' ');
+}
+
+function provenanceConfidenceLabel(value = '') {
+  return String(value).replace(/-/g, ' ');
+}
+
+function sourceDomain(value = '') {
+  if (!value) return '';
+  try {
+    const parsed = new URL(value);
+    return parsed.hostname.replace(/^www\./, '');
+  } catch {
+    return '';
+  }
+}
+
+function fileNameFromPath(value = '') {
+  if (!value) return '';
+  return path.basename(value);
+}
+
+function titleCase(value = '') {
+  const clean = String(value).replace(/[-_]+/g, ' ').trim();
+  return clean ? clean.replace(/\b\w/g, char => char.toUpperCase()) : '';
 }
 
 function snippetFormatForTarget(target) {
@@ -541,17 +905,38 @@ function snippetFormatForTarget(target) {
   return 'other';
 }
 
-function nextFigureNumberHint(editor) {
-  const document = editor && editor.document;
-  if (!document || typeof document.getText !== 'function') return '';
+async function writeSnippetToActiveEditor(vscode, { snippet } = {}) {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    throw new Error('Open the target draft before writing the figure snippet.');
+  }
 
-  const matches = document.getText().match(/Figure\s+(\d+)/gi) || [];
-  const numbers = matches
-    .map(match => Number((match.match(/\d+/) || [])[0]))
-    .filter(Number.isFinite);
-  if (numbers.length === 0) return '';
+  const document = editor.document;
+  const ok = await editor.edit(editBuilder => {
+    if (editor.selection && !editor.selection.isEmpty) {
+      editBuilder.replace(editor.selection, snippet);
+    } else {
+      editBuilder.insert(editor.selection.active, snippet);
+    }
+  });
 
-  return String(Math.max(...numbers) + 1);
+  if (!ok) throw new Error('VS Code rejected the figure snippet edit.');
+  if (document.save) await document.save();
+
+  return { path: document.uri && document.uri.fsPath };
+}
+
+function hasDirectPlacementLedgerMethods(ledgerWriter) {
+  return [
+    'savePlacement',
+    'markSagaStep',
+    'markAssetPublishing',
+    'markPlacementPublishing',
+    'updateAssetPublication',
+    'updatePlacementSnippet',
+    'markPlaced',
+    'markFailed'
+  ].every(name => ledgerWriter && typeof ledgerWriter[name] === 'function');
 }
 
 function placementId({ assetId, contentDraftId, target, figureNumber }) {

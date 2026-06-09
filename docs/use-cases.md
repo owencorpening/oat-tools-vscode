@@ -59,8 +59,9 @@ to a provider-scoped search such as
 results page as discovery only: it can still include image previews, linked
 pages, or embedded assets from other sites.
 
-Future preferred path: search provider APIs from inside VS Code, stage a result
-with provenance automatically, and avoid leaving the review flow.
+Preferred path: search provider APIs and local `~/Downloads` candidates from
+inside VS Code, stage a result with provenance or filename-hint metadata, and
+avoid leaving the review flow when possible.
 The implementation plan for that path is in
 [image-provider-search-plan.md](image-provider-search-plan.md).
 
@@ -111,8 +112,8 @@ needs.
 
 ## Use Case: Search For Images Inside VS Code
 
-Target state: use this when the author is reviewing a draft and wants to find a
-visual without leaving VS Code.
+Use this when the author is reviewing a draft and wants to find a visual without
+leaving VS Code.
 
 Detailed plan: [image-provider-search-plan.md](image-provider-search-plan.md).
 
@@ -120,24 +121,30 @@ Steps:
 
 1. Select or place the cursor near the dense passage.
 2. Open `OAT Image Staging`.
-3. Search a provider such as Unsplash or Pexels from the sidebar.
-4. Review thumbnails with photographer, license, and source page already shown.
+3. Search Pexels and local `~/Downloads` candidates from the sidebar.
+4. Review thumbnails with photographer, license, source page, local filename, or
+   filename-derived hints already shown.
 5. Click `Stage` on a result.
 6. Click `Place` on the staged asset.
 
 What the tool should do:
 
 - Query provider APIs instead of scraping search-result pages.
+- Treat `~/Downloads` as a local provider that scans image-like files and
+  extracts filename hints.
 - Store the source page, direct image URL, photographer, license, and provider
   IDs in D1.
+- Store local source path, filename, content hash, and proposed filename hints
+  for Downloads results.
 - Avoid the browser round trip when the author is already in review mode.
-- Keep Downloads intake as an escape hatch for sources that cannot be searched
-  through a provider API.
+- Keep manual Downloads intake as an escape hatch for files that need explicit
+  picker-driven intake.
 
 Result:
 
-The author stays in the draft-review loop, and provenance is stronger because it
-comes from the provider API rather than a detached downloaded file.
+The author stays in the draft-review loop. API-provider provenance is stronger,
+and local Downloads candidates at least enter staging with explicit
+filename-hint confidence instead of disappearing into an untracked folder.
 
 ## Use Case: Promote Draft Tables
 

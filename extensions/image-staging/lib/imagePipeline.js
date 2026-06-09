@@ -65,6 +65,7 @@ async function placeAsset(options = {}) {
       imageUrl: placedAsset.imageUrl,
       displayName: asset.displayName,
       figureNumber: placement.figureNumber,
+      caption: placement.caption || placement.draftLocation?.caption,
       attribution: asset.attribution,
       photographer: asset.photographer,
       license: asset.license
@@ -159,6 +160,7 @@ function normalizePlacement(placement = {}) {
     target: placement.target,
     figureNumber: placement.figureNumber || placement.figure_number,
     draftLocation: placement.draftLocation || placement.draft_location_json,
+    caption: placement.caption,
     snippet: placement.snippet,
     snippetFormat: placement.snippetFormat || placement.snippet_format,
     status: placement.status,

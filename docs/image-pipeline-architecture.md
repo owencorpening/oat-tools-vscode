@@ -185,12 +185,15 @@ Images can enter the pipeline from several places:
   ledger Worker, which enriches provider metadata when API keys are configured
   and creates a staged `asset` record.
 - **In-editor provider search:** target-state flow where the author searches
-  providers such as Unsplash or Pexels from the VS Code sidebar, stages a result
-  with provider-backed provenance, and stays in the draft-review loop. The
-  resumable implementation plan is
+  providers such as Pexels plus local `~/Downloads` candidates from the VS Code
+  sidebar, stages a result with provider-backed provenance or filename-hint
+  metadata, and stays in the draft-review loop. The resumable implementation
+  plan is
   [image-provider-search-plan.md](image-provider-search-plan.md).
 - **`~/Downloads`:** local files that may have been generated, downloaded, or
-  routed by a watcher.
+  routed by a watcher. In the VS Code sidebar, Downloads is also a local
+  provider: it can be searched by filename and staged into the same D1 asset
+  shape as remote provider results.
 - **AI-generated files:** obvious generated images such as `chatgpt*.png` or
   similar filenames. These often carry useful filename metadata such as date,
   timestamp, prompt fragments, or generation source.

@@ -52,8 +52,8 @@ Frame 1: Notice the image opportunity.
 - While reviewing the markdown draft, the author sees a spot where an image
   should go.
 - If the image is already staged, skip to Frame 3.
-- If the author needs to find one, use the bookmarklet path, the Downloads path,
-  or future in-VS-Code provider search.
+- If the author needs to find one, use sidebar search, the bookmarklet path, or
+  the manual Downloads intake path.
 
 Frame 2: Add an image to the notebook.
 
@@ -62,6 +62,8 @@ Frame 2: Add an image to the notebook.
   `site:unsplash.com OR site:pexels.com OR site:pixabay.com wetland`.
   Treat the results page as discovery only: it can still show images, previews,
   or linked pages from other sites.
+- In VS Code, use the `OAT Image Staging` search box to search Pexels and local
+  `~/Downloads` candidate images from the sidebar.
 - For one-click browser capture, click the OAT D1 image capture bookmarklet.
 - For a browsed image downloaded to `~/Downloads`, run
   `OAT Images: Intake Local File`.
@@ -81,6 +83,8 @@ Frame 3: Open the staging panel.
 - Run `OAT Images: Refresh Image Panel` if the panel looks stale.
 - With `oatImages.ledgerApiUrl` set, the panel reads staged images from the
   notebook.
+- The panel can also search Pexels when the Worker has `PEXELS_ACCESS_KEY`, and
+  can search likely image files in `~/Downloads` locally.
 
 Frame 4: Plan a placement.
 
@@ -119,9 +123,9 @@ marking the placement as done.
 ## Most Common Path
 
 1. Review the markdown draft until an image opportunity appears.
-2. Capture an image with the bookmarklet, intake a downloaded file, or choose an
-   existing staged image from the sidebar. Future provider search in VS Code
-   should become the smoothest path.
+2. Search Pexels and `~/Downloads` from the sidebar, capture an image with the
+   bookmarklet, intake a downloaded file manually, or choose an existing staged
+   image.
 3. Open `OAT Image Staging`.
 4. Click `Place` on the staged image.
 5. Run `OAT Images: Prepare Planned Placement Run`.

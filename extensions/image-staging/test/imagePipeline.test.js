@@ -25,6 +25,9 @@ async function testPlaceAssetSuccess() {
       id: 'placement-1',
       target: 'substack',
       figureNumber: '2',
+      draftLocation: {
+        caption: 'River map. Image by Owen, OAT.'
+      },
       contentDraftId: 'draft-1'
     },
     ledger,
@@ -35,6 +38,7 @@ async function testPlaceAssetSuccess() {
   assert.strictEqual(result.snippetFormat, 'html-figure');
   assert.strictEqual(result.placedAsset.relPath, 'water-series/part-09/river-map');
   assert(result.snippet.includes('Figure 2'));
+  assert(result.snippet.includes('River map. Image by Owen, OAT.'));
   assert(calls.some(call => call[0] === 'assetPublication' && call[1] === 'water-series/part-09/river-map'));
   assert(calls.some(call => call[0] === 'placementSnippet' && call[1] === 'html-figure'));
   assert.deepStrictEqual(calls.at(-1), ['sagaStep', 7, 'succeeded']);

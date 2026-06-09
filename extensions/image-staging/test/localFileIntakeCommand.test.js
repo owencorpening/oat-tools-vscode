@@ -34,7 +34,7 @@ async function testCopiesJsonWithoutDb() {
   const vscode = fakeVscode({
     filePath,
     quickPick: 'Downloads file',
-    inputs: ['River Map', 'https://example.com/source', 'A', 'CC', 'water-series/part-09'],
+    inputs: ['River Map', 'https://example.com/source', 'A', 'CC', 'Image: River Map, by A.', 'water-series/part-09'],
     copied
   });
 
@@ -45,6 +45,7 @@ async function testCopiesJsonWithoutDb() {
 
   assert.strictEqual(result.asset.id, 'asset-fixed');
   assert.strictEqual(result.asset.displayName, 'River Map');
+  assert.strictEqual(result.asset.attribution, 'Image: River Map, by A.');
   assert.strictEqual(result.asset.intakeSection, 'water-series/part-09');
   assert.strictEqual(JSON.parse(copied[0]).asset.id, 'asset-fixed');
 }
@@ -55,7 +56,7 @@ async function testWritesToLedgerWithDb() {
   const vscode = fakeVscode({
     filePath,
     quickPick: 'AI-generated file',
-    inputs: ['AI Canal Diagram', '', '', 'OAT rights', 'water-series/part-10']
+    inputs: ['AI Canal Diagram', '', '', 'OAT rights', '', 'water-series/part-10']
   });
   const assetLedger = {
     createAsset: async (db, asset) => calls.push(['asset', db.id, asset.id, asset.photographer, asset.status])
@@ -78,7 +79,7 @@ async function testWritesToLedgerWriter() {
   const vscode = fakeVscode({
     filePath,
     quickPick: 'Downloads file',
-    inputs: ['River Map', 'https://example.com/source', 'A', 'CC', 'water-series/part-09']
+    inputs: ['River Map', 'https://example.com/source', 'A', 'CC', '', 'water-series/part-09']
   });
   const ledgerWriter = {
     saveAsset: async payload => calls.push(payload)
