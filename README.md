@@ -8,8 +8,10 @@ This repo is a monorepo with two separately installable extensions:
 - `OAT Image Staging` for staged image placement
 
 For the fastest image ledger walkthrough, see
-[docs/image-pipeline-quickstart.md](docs/image-pipeline-quickstart.md). For the
-workflow-level guide to what each tool is for and how to use it, see
+[docs/image-pipeline-quickstart.md](docs/image-pipeline-quickstart.md). For how
+image provenance is determined and auto-staged, see
+[docs/image-provenance.md](docs/image-provenance.md). For the workflow-level
+guide to what each tool is for and how to use it, see
 [docs/use-cases.md](docs/use-cases.md). For the working architecture target that
 reconciles these extensions with the content standards, see
 [docs/image-pipeline-architecture.md](docs/image-pipeline-architecture.md). For

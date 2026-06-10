@@ -58,6 +58,8 @@ async function normalizeDownloadsFile({ filePath, fileName, stat }) {
   const hints = inferFilenameHints(fileName);
   const title = hints.title || displayNameFromFileName(fileName);
   const sourceKind = hints.tool === 'ChatGPT' ? 'ai-generated' : 'downloads';
+  const license = licenseForTool(hints.tool);
+  const status = sourceKind === 'ai-generated' && license ? 'staged' : 'needs-provenance';
 
   return {
     provider: 'downloads',
@@ -68,8 +70,8 @@ async function normalizeDownloadsFile({ filePath, fileName, stat }) {
     sourceKind,
     thumbnailUrl: await thumbnailDataUri(filePath),
     photographer: sourceKind === 'ai-generated' ? 'Owen Corpening' : '',
-    license: '',
-    status: 'needs-provenance',
+    license,
+    status,
     provenanceConfidence: 'filename-hint',
     proposedTool: hints.tool,
     proposedCreatedAt: hints.createdAt,
@@ -100,6 +102,15 @@ function inferFilenameHints(fileName) {
     subject: subject || undefined,
     title: displayNameFromFileName(fileName)
   };
+}
+
+function licenseForTool(tool) {
+  switch (tool) {
+    case 'ChatGPT':
+      return 'ChatGPT (OpenAI ToS: https://openai.com/policies/terms-of-use)';
+    default:
+      return '';
+  }
 }
 
 function parseChatGptTimestamp(match) {

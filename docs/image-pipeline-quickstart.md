@@ -68,8 +68,11 @@ Frame 2: Add an image to the notebook.
 - For a browsed image downloaded to `~/Downloads`, run
   `OAT Images: Intake Local File`.
 - For a spontaneous AI/tool output in `~/Downloads`, use the same local-file
-  intake path. Filenames can prefill hints such as tool, timestamp, subject, or
-  style, but the author should confirm provenance before placement.
+  intake path. If the filename matches a known AI platform (e.g., ChatGPT),
+  it auto-stages immediately with provenance inferred from the filename. Otherwise,
+  filenames can prefill hints (tool, timestamp, subject, style), but the author
+  should confirm provenance before placement. See
+  [image-provenance.md](image-provenance.md) for how provenance works.
 - For a URL copied manually, run `OAT Images: Intake URL`.
 - For a late-review visual gap, run `OAT Images: Create Review Image Need`.
 - Some image sites bury the actual downloadable image behind detail pages,

@@ -64,6 +64,19 @@ async function downloadAsset({ url, dest }) {
   await download(url, dest);
 }
 
+async function copyAsset({ src, dest }) {
+  return new Promise((resolve, reject) => {
+    const dir = path.dirname(dest);
+    fs.mkdir(dir, { recursive: true }, err => {
+      if (err) return reject(err);
+      fs.copyFile(src, dest, err => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+  });
+}
+
 function gitPushAsset(repoPath, relPath, slug) {
   return new Promise((resolve, reject) => {
     const cmd = `git add "${relPath}" && git commit -m "add ${slug}" && git push`;
@@ -132,6 +145,7 @@ module.exports = {
   writeProvenanceFiles,
   buildRawGitHubBase,
   downloadAsset,
+  copyAsset,
   gitPushAsset,
   removePlacedAssetBySourceUrl,
   guessExt

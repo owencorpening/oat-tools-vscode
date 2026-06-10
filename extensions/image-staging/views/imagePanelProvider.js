@@ -47,15 +47,20 @@ class ImagePanelProvider {
     }, 1000);
 
     webviewView.webview.onDidReceiveMessage(async msg => {
+      console.log('[OAT] Received message:', msg.type, msg);
       try {
         switch (msg.type) {
-          case 'refresh': return await this._loadStaged();
+          case 'refresh': {
+            console.log('[OAT] Handling refresh. ledgerWriter available:', !!this._ledgerWriter, 'has listStagedAssets:', !!(this._ledgerWriter && this._ledgerWriter.listStagedAssets));
+            return await this._loadStaged();
+          }
           case 'providerSearch': return await this._handleProviderSearch(msg);
           case 'stageProviderImage': return await this._handleStageProviderImage(msg.result);
           case 'place':   return await this._handlePlace(msg.image);
           case 'discard': return await this._handleDiscard(msg.image);
         }
       } catch (err) {
+        console.error('[OAT] Error handling message:', err);
         this._send({ type: 'error', message: err.message });
       }
     }, null, this._context.subscriptions);
@@ -98,10 +103,13 @@ class ImagePanelProvider {
   async _loadD1Staged() {
     try {
       const result = await this._ledgerWriter.listStagedAssets();
+      console.log('[OAT] _loadD1Staged result:', result);
       const assets = Array.isArray(result?.assets) ? result.assets : [];
+      console.log('[OAT] assets count:', assets.length);
       const images = assets.map(normalizeD1AssetForPanel);
       this._send({ type: 'staged', images, source: 'd1' });
     } catch (err) {
+      console.error('[OAT] _loadD1Staged error:', err);
       this._send({ type: 'error', message: err.message });
     }
   }
@@ -155,17 +163,26 @@ class ImagePanelProvider {
       return null;
     }
 
-    const response = await this._ledgerWriter.stageProviderImage({
-      provider: result.provider,
-      providerId: result.providerId,
-      sourceUrl: result.sourceUrl,
-      result
-    });
+    try {
+      const response = await this._ledgerWriter.stageProviderImage({
+        provider: result.provider,
+        providerId: result.providerId,
+        sourceUrl: result.sourceUrl,
+        result
+      });
 
-    vscode.window.showInformationMessage(`OAT: Staged ${result.title || result.sourceUrl || 'provider image'}.`);
-    this._send({ type: 'providerStaged', asset: response && response.asset });
-    await this._loadStaged();
-    return response;
+      vscode.window.showInformationMessage(`OAT: Staged ${result.title || result.sourceUrl || 'provider image'}.`);
+      this._send({ type: 'providerStaged', asset: response && response.asset });
+      await this._loadStaged();
+      return response;
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE constraint failed: asset.content_hash')) {
+        vscode.window.showInformationMessage('OAT: This image is already staged.');
+        await this._loadStaged();
+        return null;
+      }
+      throw err;
+    }
   }
 
   async _handleStageDownloadsImage(result) {
@@ -175,13 +192,22 @@ class ImagePanelProvider {
     }
     if (!this._downloadsProvider || !this._downloadsProvider.stageDownloadsResult) return null;
 
-    const asset = await this._downloadsProvider.stageDownloadsResult(result);
-    await this._ledgerWriter.saveAsset({ asset });
+    try {
+      const asset = await this._downloadsProvider.stageDownloadsResult(result);
+      await this._ledgerWriter.saveAsset({ asset });
 
-    vscode.window.showInformationMessage(`OAT: Staged ${asset.displayName || result.title || 'Downloads image'}.`);
-    this._send({ type: 'providerStaged', asset });
-    await this._loadStaged();
-    return { asset };
+      vscode.window.showInformationMessage(`OAT: Staged ${asset.displayName || result.title || 'Downloads image'}.`);
+      this._send({ type: 'providerStaged', asset });
+      await this._loadStaged();
+      return { asset };
+    } catch (err) {
+      if (err.message && err.message.includes('UNIQUE constraint failed: asset.content_hash')) {
+        vscode.window.showInformationMessage('OAT: This image is already staged.');
+        await this._loadStaged();
+        return null;
+      }
+      throw err;
+    }
   }
 
   // ── Place ─────────────────────────────────────────────────────────────────
@@ -238,12 +264,15 @@ class ImagePanelProvider {
 
     await this._ledgerWriter.savePlacement({ contentDraft, placement, saga });
 
+    const { series, partDir } = extractSeriesAndPartDir(editor);
     const placed = await this._runPlacement({
       db: {},
       sagaId: saga.id,
       repoPath: this._getImagesRepoPath(vscode),
       asset: image,
       placement,
+      series,
+      partDir,
       ledger: this._ledgerWriter,
       download: true,
       commit: true,
@@ -498,10 +527,20 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads', 'pexels'] });
 });
 
-document.getElementById('results').addEventListener('click', handleCardAction);
-document.getElementById('list').addEventListener('click', handleCardAction);
+const resultsEl = document.getElementById('results');
+const listEl = document.getElementById('list');
+console.log('[OAT-Webview] Attaching click handlers to:', resultsEl, listEl);
+resultsEl.addEventListener('click', e => {
+  console.log('[OAT-Webview] Click on results:', e.target);
+  handleCardAction(e);
+});
+listEl.addEventListener('click', e => {
+  console.log('[OAT-Webview] Click on list:', e.target);
+  handleCardAction(e);
+});
 
 let _timeoutId = null;
+let _lastStagedIndex = null;
 
 window.addEventListener('message', e => {
   const msg = e.data;
@@ -511,6 +550,7 @@ window.addEventListener('message', e => {
     clearTimeout(_timeoutId);
     images = msg.images;
     render();
+    renderProviderResults('');
   } else if (msg.type === 'providers') {
     availableProviders = msg.providers || [];
     renderProviderAvailability();
@@ -518,6 +558,10 @@ window.addEventListener('message', e => {
     providerResults = msg.results || [];
     renderProviderResults(providerResults.length ? '' : 'No provider results.');
   } else if (msg.type === 'providerStaged') {
+    if (_lastStagedIndex !== null && providerResults[_lastStagedIndex]) {
+      providerResults.splice(_lastStagedIndex, 1);
+      _lastStagedIndex = null;
+    }
     renderProviderResults('Staged.');
   } else if (msg.type === 'providerNotice') {
     renderProviderResults(msg.message || '');
@@ -528,6 +572,7 @@ window.addEventListener('message', e => {
     document.getElementById('status').style.display = 'block';
     document.getElementById('list').innerHTML = '';
     document.getElementById('count').textContent = '';
+    _lastStagedIndex = null;
   }
 });
 
@@ -563,7 +608,15 @@ function renderProviderResults(message) {
     return;
   }
 
-  results.innerHTML = '<div class="section-title">Provider Results</div>' + providerResults.map((img, i) => {
+  console.log('[OAT-Webview] Filtering results. staged images:', images.length, 'provider results:', providerResults.length);
+  const filterableResults = providerResults.filter((img, i) => {
+    const isStaged = isImageAlreadyStaged(img);
+    if (isStaged) console.log('[OAT-Webview] Filtered out:', img.title || img.sourcePath || img.sourceUrl);
+    return !isStaged;
+  });
+
+  results.innerHTML = '<div class="section-title">Provider Results</div>' + filterableResults.map((img, displayIndex) => {
+    const actualIndex = providerResults.indexOf(img);
     const previewSrc = img.previewUrl || img.thumbnailUrl || img.imageSrc;
     const thumbHtml = previewSrc
       ? '<img class="thumb" src="' + esc(previewSrc) + '" alt="" loading="lazy">'
@@ -577,7 +630,7 @@ function renderProviderResults(message) {
           '</div>' +
         '</div>' +
         '<div class="actions">' +
-          '<button class="btn btn-stage" type="button" data-action="stage" data-i="' + i + '">Stage</button>' +
+          '<button class="btn btn-stage" type="button" data-action="stage" data-i="' + actualIndex + '">Stage</button>' +
         '</div>' +
       '</div>'
     );
@@ -587,6 +640,27 @@ function renderProviderResults(message) {
     img.addEventListener('error', function() {
       this.parentNode.innerHTML = '<div class="no-thumb">No preview</div>';
     });
+  });
+}
+
+function isImageAlreadyStaged(providerResult) {
+  if (!providerResult) return false;
+
+  return images.some(stagedImg => {
+    if (providerResult.provider === 'downloads' && providerResult.sourcePath) {
+      const match = stagedImg.sourcePath === providerResult.sourcePath;
+      if (match) console.log('[OAT] downloads match:', stagedImg.sourcePath);
+      return match;
+    }
+    if (providerResult.sourceUrl && stagedImg.sourceUrl) {
+      const match = stagedImg.sourceUrl === providerResult.sourceUrl;
+      if (match) console.log('[OAT] sourceUrl match:', stagedImg.sourceUrl);
+      if (!match && providerResult.sourceUrl) {
+        console.log('[OAT] sourceUrl mismatch - provider:', providerResult.sourceUrl, 'staged:', stagedImg.sourceUrl);
+      }
+      return match;
+    }
+    return false;
   });
 }
 
@@ -635,13 +709,20 @@ function render() {
 }
 
 function handleCardAction(event) {
+  console.log('[OAT-Webview] Card action clicked:', event.target);
   const button = event.target.closest('button[data-action]');
-  if (!button) return;
+  if (!button) {
+    console.log('[OAT-Webview] No button found');
+    return;
+  }
 
   const index = Number(button.dataset.i);
+  console.log('[OAT-Webview] Button action:', button.dataset.action, 'index:', index, 'providerResults length:', providerResults.length);
   if (!Number.isInteger(index) || index < 0) return;
 
   if (button.dataset.action === 'stage') {
+    console.log('[OAT-Webview] Posting stageProviderImage, result:', providerResults[index]);
+    _lastStagedIndex = index;
     vscode.postMessage({ type: 'stageProviderImage', result: providerResults[index] });
   } else if (button.dataset.action === 'place') {
     vscode.postMessage({ type: 'place', image: images[index] });
@@ -714,6 +795,27 @@ function isMarkdownDraft(editor) {
 
 function placementTargetFromEditor(editor) {
   return placementTargetFromDraftPath(editor?.document?.uri?.fsPath);
+}
+
+function extractSeriesAndPartDir(editor) {
+  const filePath = editor?.document?.uri?.fsPath || '';
+  const normalized = filePath.replace(/\\/g, '/');
+  const segments = normalized.split('/').filter(Boolean);
+
+  // Find substack-ideas or standalone
+  const ideaIndex = segments.findIndex(seg => seg === 'substack-ideas' || seg === 'standalone');
+  if (ideaIndex === -1 || ideaIndex + 2 >= segments.length) {
+    return { series: '', partDir: '' };
+  }
+
+  // Series is the directory after substack-ideas/
+  const series = segments[ideaIndex + 1];
+
+  // PartDir is the filename without .md extension
+  const filename = segments[segments.length - 1];
+  const partDir = filename.replace(/\.md$/i, '');
+
+  return { series, partDir };
 }
 
 function placementTargetFromDraftPath(draftPath) {

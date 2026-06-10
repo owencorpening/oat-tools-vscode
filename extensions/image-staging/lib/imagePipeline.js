@@ -43,7 +43,12 @@ async function placeAsset(options = {}) {
 
     await setSagaStep(ledger, db, sagaId, 3, 'Overwrite only when the content hash matches');
     if (download) {
-      await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
+      const isLocalSource = isLocalSourceKind(asset.sourceKind);
+      if (isLocalSource && asset.sourcePath) {
+        await repo.copyAsset({ src: asset.sourcePath, dest: placedAsset.imagePath });
+      } else {
+        await repo.downloadAsset({ url: placedAsset.downloadSrc, dest: placedAsset.imagePath });
+      }
     }
 
     await setSagaStep(ledger, db, sagaId, 4, 'Rewrite deterministic provenance files from the asset record');
@@ -206,6 +211,10 @@ function requireValue(value, name) {
   if (value === undefined || value === null || value === '') {
     throw new Error(`placeAsset requires ${name}`);
   }
+}
+
+function isLocalSourceKind(sourceKind) {
+  return sourceKind === 'downloads' || sourceKind === 'ai-generated' || sourceKind === 'user-provided';
 }
 
 module.exports = {
