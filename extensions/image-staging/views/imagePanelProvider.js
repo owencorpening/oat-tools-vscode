@@ -650,6 +650,7 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   const query = document.getElementById('searchInput').value.trim();
   if (!query) return;
   _currentProvider = 'Downloads';
+  _currentSearchProvider = 'downloads';
   providerResults = [];
   renderProviderResults('Searching…');
   vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads'] });
@@ -660,6 +661,7 @@ document.getElementById('pexelsForm').addEventListener('submit', event => {
   const query = document.getElementById('pexelsInput').value.trim();
   if (!query) return;
   _currentProvider = 'Pexels';
+  _currentSearchProvider = 'pexels';
   providerResults = [];
   renderPexelsResults('Searching…');
   vscode.postMessage({ type: 'providerSearch', query, providers: ['pexels'] });
@@ -669,6 +671,7 @@ if (document.getElementById('browseBtn')) {
   document.getElementById('browseBtn').addEventListener('click', event => {
     event.preventDefault();
     _currentProvider = 'Downloads';
+    _currentSearchProvider = 'downloads';
     providerResults = [];
     renderProviderResults('Loading Downloads…');
     vscode.postMessage({ type: 'providerSearch', query: '*', providers: ['downloads'] });
@@ -695,6 +698,7 @@ listEl.addEventListener('click', e => {
 let _timeoutId = null;
 let _lastStagedIndex = null;
 let _currentProvider = 'downloads + pexels';
+let _currentSearchProvider = 'downloads';
 
 window.addEventListener('message', e => {
   const msg = e.data;
@@ -725,7 +729,11 @@ window.addEventListener('message', e => {
       providerResults.splice(_lastStagedIndex, 1);
       _lastStagedIndex = null;
     }
-    renderProviderResults('Staged.');
+    if (_currentSearchProvider === 'pexels') {
+      renderPexelsResults('Staged.');
+    } else {
+      renderProviderResults('Staged.');
+    }
   } else if (msg.type === 'providerNotice') {
     renderProviderResults(msg.message || '');
   } else if (msg.type === 'error') {
