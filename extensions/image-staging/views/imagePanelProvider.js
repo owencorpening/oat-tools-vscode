@@ -238,76 +238,101 @@ class ImagePanelProvider {
   // ── Place ─────────────────────────────────────────────────────────────────
 
   async _handlePlace(image) {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor) {
-      vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a notebook image.');
-      return null;
+    try {
+      this._log('[OAT] _handlePlace called with image: ' + (image?.name || image?.slug || 'unknown'));
+
+      const editor = vscode.window.activeTextEditor;
+      this._log('[OAT] Editor found: ' + (!!editor));
+      if (!editor) {
+        vscode.window.showWarningMessage('OAT: Open the target markdown draft before placing a notebook image.');
+        return null;
+      }
+
+      if (!isMarkdownDraft(editor)) {
+        vscode.window.showWarningMessage('OAT: Open a markdown draft before placing a notebook image.');
+        return null;
+      }
+
+      const target = placementTargetFromEditor(editor);
+      this._log('[OAT] Placement target: ' + target);
+      if (!target) {
+        vscode.window.showWarningMessage('OAT: Open a Substack draft under substack-ideas or a carousel draft ending in carousel.md before placing.');
+        return null;
+      }
+
+      if (!hasDirectPlacementLedgerMethods(this._ledgerWriter)) {
+        vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before placing figures.');
+        return null;
+      }
+
+      this._log('[OAT] Building content draft...');
+      const contentDraft = buildContentDraftRecord({ vscode, editor });
+      this._log('[OAT] Content draft built: ' + contentDraft.id);
+
+      this._log('[OAT] Getting figure number...');
+      const figureNumber = await nextFigureNumber({ editor, ledgerWriter: this._ledgerWriter, contentDraftId: contentDraft.id });
+      this._log('[OAT] Figure number: ' + figureNumber);
+
+      const caption = captionSuggestionForImage(image);
+      this._log('[OAT] Caption: ' + caption);
+
+      const placement = {
+        id: placementId({ assetId: image.id, contentDraftId: contentDraft.id, target, figureNumber }),
+        assetId: image.id,
+        contentDraftId: contentDraft.id,
+        target,
+        figureNumber,
+        draftLocation: {
+          ...buildDraftLocation(editor),
+          caption
+        },
+        snippetFormat: snippetFormatForTarget(target),
+        status: 'planned'
+      };
+      this._log('[OAT] Placement object created');
+
+      const saga = {
+        id: sagaId(placement.id),
+        assetId: image.id,
+        assetPlacementId: placement.id,
+        currentStep: 1,
+        status: 'running',
+        resolution: 'auto-retry',
+        compensation: 'Ready for local placement saga'
+      };
+      this._log('[OAT] Saga object created');
+
+      await this._ledgerWriter.savePlacement({ contentDraft, placement, saga });
+      this._log('[OAT] Placement saved to ledger');
+
+      const { series, partDir } = extractSeriesAndPartDir(editor);
+      this._log('[OAT] Series: ' + series + ', PartDir: ' + partDir);
+
+      this._log('[OAT] Running placement...');
+      const placed = await this._runPlacement({
+        db: {},
+        sagaId: saga.id,
+        repoPath: this._getImagesRepoPath(vscode),
+        asset: image,
+        placement,
+        series,
+        partDir,
+        ledger: this._ledgerWriter,
+        download: true,
+        commit: true,
+        writeSnippet: payload => this._writeSnippet(vscode, payload)
+      });
+      this._log('[OAT] Placement completed');
+
+      vscode.window.showInformationMessage(`OAT: Placed Figure ${figureNumber} for ${image.displayName || image.name}.`);
+      await this._loadStaged();
+
+      return { contentDraft, placement, saga, placed };
+    } catch (err) {
+      this._log('[OAT] ERROR in _handlePlace: ' + (err?.message || err?.toString()));
+      vscode.window.showErrorMessage('OAT: ' + (err?.message || 'Unknown error during placement'));
+      throw err;
     }
-
-    if (!isMarkdownDraft(editor)) {
-      vscode.window.showWarningMessage('OAT: Open a markdown draft before placing a notebook image.');
-      return null;
-    }
-
-    const target = placementTargetFromEditor(editor);
-    if (!target) {
-      vscode.window.showWarningMessage('OAT: Open a Substack draft under substack-ideas or a carousel draft ending in carousel.md before placing.');
-      return null;
-    }
-
-    if (!hasDirectPlacementLedgerMethods(this._ledgerWriter)) {
-      vscode.window.showWarningMessage('OAT: Set oatImages.ledgerApiUrl before placing figures.');
-      return null;
-    }
-
-    const contentDraft = buildContentDraftRecord({ vscode, editor });
-    const figureNumber = await nextFigureNumber({ editor, ledgerWriter: this._ledgerWriter, contentDraftId: contentDraft.id });
-    const caption = captionSuggestionForImage(image);
-
-    const placement = {
-      id: placementId({ assetId: image.id, contentDraftId: contentDraft.id, target, figureNumber }),
-      assetId: image.id,
-      contentDraftId: contentDraft.id,
-      target,
-      figureNumber,
-      draftLocation: {
-        ...buildDraftLocation(editor),
-        caption
-      },
-      snippetFormat: snippetFormatForTarget(target),
-      status: 'planned'
-    };
-    const saga = {
-      id: sagaId(placement.id),
-      assetId: image.id,
-      assetPlacementId: placement.id,
-      currentStep: 1,
-      status: 'running',
-      resolution: 'auto-retry',
-      compensation: 'Ready for local placement saga'
-    };
-
-    await this._ledgerWriter.savePlacement({ contentDraft, placement, saga });
-
-    const { series, partDir } = extractSeriesAndPartDir(editor);
-    const placed = await this._runPlacement({
-      db: {},
-      sagaId: saga.id,
-      repoPath: this._getImagesRepoPath(vscode),
-      asset: image,
-      placement,
-      series,
-      partDir,
-      ledger: this._ledgerWriter,
-      download: true,
-      commit: true,
-      writeSnippet: payload => this._writeSnippet(vscode, payload)
-    });
-
-    vscode.window.showInformationMessage(`OAT: Placed Figure ${figureNumber} for ${image.displayName || image.name}.`);
-    await this._loadStaged();
-
-    return { contentDraft, placement, saga, placed };
   }
 
   // ── Discard ───────────────────────────────────────────────────────────────
