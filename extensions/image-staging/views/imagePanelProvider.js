@@ -318,8 +318,8 @@ class ImagePanelProvider {
         series,
         partDir,
         ledger: this._ledgerWriter,
-        download: true,
-        commit: true,
+        download: false,
+        commit: false,
         writeSnippet: payload => this._writeSnippet(vscode, payload)
       });
       this._log('[OAT] Placement completed');
