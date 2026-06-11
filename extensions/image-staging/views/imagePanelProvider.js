@@ -1045,10 +1045,13 @@ function figureNumbersFromText(text = '') {
 function captionSuggestionForImage(image = {}) {
   const title = image.title || image.displayName || image.name || image.sourceName || 'Untitled image';
 
-  // For provider images (Pexels, etc.), just use title. Provenance is handled separately.
-  // Detect provider images: has sourceUrl but no sourcePath
+  // For provider images (Pexels, etc.), format: title. By photographer | license
   if (image.sourceUrl && !image.sourcePath) {
-    return title;
+    const creditParts = [];
+    if (image.photographer) creditParts.push(image.photographer);
+    if (image.license) creditParts.push(image.license);
+    const credit = creditParts.length ? ' By ' + creditParts.join(' | ') : '';
+    return title + '.' + credit;
   }
 
   // For Downloads images, include full attribution
