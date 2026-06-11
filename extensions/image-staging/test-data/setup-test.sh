@@ -38,6 +38,10 @@ if [ -f "$LEDGER_PID_FILE" ]; then
 fi
 # Also kill any process on the ledger port
 lsof -i :$LEDGER_PORT 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs -r kill 2>/dev/null || true
+
+# Clear the D1 database so we start fresh
+rm -rf "$REPO_ROOT/tools/d1/worker/.wrangler/state/"
+
 echo "   ✓ Old test data removed"
 
 # 2. Copy fresh test images
