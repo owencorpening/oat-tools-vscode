@@ -162,7 +162,7 @@ class ImagePanelProvider {
       }
     }
 
-    this._send({ type: 'providerResults', query: cleanQuery, results });
+    this._send({ type: 'providerResults', query: cleanQuery, providers: requestedProviders, results });
     return { query: cleanQuery, results };
   }
 
@@ -634,6 +634,9 @@ window.addEventListener('message', e => {
     renderProviderAvailability();
   } else if (msg.type === 'providerResults') {
     providerResults = msg.results || [];
+    if (msg.providers) {
+      _currentProvider = msg.providers.map(p => p.charAt(0).toUpperCase() + p.slice(1)).join(' + ');
+    }
     renderProviderResults(providerResults.length ? '' : 'No provider results.');
   } else if (msg.type === 'providerStaged') {
     if (_lastStagedIndex !== null && providerResults[_lastStagedIndex]) {
