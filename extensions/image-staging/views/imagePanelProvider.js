@@ -52,6 +52,10 @@ class ImagePanelProvider {
       console.log('[OAT] Received message:', msg.type, msg);
       try {
         switch (msg.type) {
+          case 'webviewReady': {
+            console.log('[OAT] ✓ Webview is ready and channel is working');
+            return;
+          }
           case 'refresh': {
             console.log('[OAT] Handling refresh. ledgerWriter available:', !!this._ledgerWriter, 'has listStagedAssets:', !!(this._ledgerWriter && this._ledgerWriter.listStagedAssets));
             return await this._loadStaged();
@@ -785,7 +789,17 @@ function esc(s) {
 }
 
 // Webview sends refresh on load; extension responds with staged data
+console.log('[OAT-Webview] Webview loaded, sending refresh message');
 vscode.postMessage({ type: 'refresh' });
+vscode.postMessage({ type: 'webviewReady' });
+
+// Test that click handler is attached
+document.addEventListener('DOMContentLoaded', () => {
+  console.log('[OAT-Webview] DOM ready');
+  const resultsEl = document.getElementById('results');
+  const listEl = document.getElementById('list');
+  console.log('[OAT-Webview] Elements found - results:', !!resultsEl, 'list:', !!listEl);
+});
 
 _timeoutId = setTimeout(() => {
   const s = document.getElementById('status');
