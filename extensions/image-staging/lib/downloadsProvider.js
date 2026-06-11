@@ -150,7 +150,9 @@ function matchesQuery(fileName, terms) {
 }
 
 function tokenize(query) {
-  return String(query || '')
+  const str = String(query || '').trim();
+  if (str === '*') return [];
+  return str
     .toLowerCase()
     .split(/\s+/)
     .map(term => term.trim())
