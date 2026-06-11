@@ -83,8 +83,8 @@ echo "✓ Setup complete! Opening VSCode..."
 echo ""
 
 # Launch VSCode with environment variable for ledger
-export OAT_IMAGES_LEDGER_API_URL="http://localhost:$LEDGER_PORT"
-code "$TEST_REPO_COPY"
+# Must pass as part of the command, not just export
+OAT_IMAGES_LEDGER_API_URL="http://localhost:$LEDGER_PORT" code "$TEST_REPO_COPY" &
 
 echo ""
 echo "Ledger server running (PID: $LEDGER_PID)"
