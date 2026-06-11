@@ -50,7 +50,7 @@ async function stageDownloadsResult(result, {
     photographer: result.photographer,
     license: result.license,
     sourceName: result.sourceName,
-    status: result.status || 'needs-provenance'
+    status: 'staged'
   });
 }
 
