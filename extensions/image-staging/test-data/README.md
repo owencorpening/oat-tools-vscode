@@ -28,20 +28,23 @@ test-data/
 
 ### Setup
 
-1. Copy the `repo/` folder structure somewhere on your machine:
-   ```bash
-   cp -r extensions/image-staging/test-data/repo ~/test-repo-oat
-   ```
+Run the setup script from the repo root:
 
-2. Copy test images to your Downloads folder:
-   ```bash
-   cp extensions/image-staging/test-data/downloads/* ~/Downloads/
-   ```
+```bash
+extensions/image-staging/test-data/setup-test.sh
+```
 
-3. Open VSCode with the test repo:
-   ```bash
-   code ~/test-repo-oat
-   ```
+This will:
+
+1. Copy test images to `~/Downloads/`
+2. Copy repo structure to `~/test-repo-oat/`
+3. Print next steps
+
+Then open VSCode with the test repo:
+
+```bash
+code ~/test-repo-oat
+```
 
 ### Manual Test Workflows
 
@@ -120,22 +123,18 @@ All images are minimal 1x1 PNG files for testing filename parsing, not image dis
 
 ### Cleanup
 
-After testing, remove the test images from your Downloads folder:
+After testing, run the teardown script from the repo root:
 
 ```bash
-rm ~/Downloads/water-droplet-unsplash.png
-rm ~/Downloads/ocean-wave-pexels.png
-rm ~/Downloads/solar-panel-getty.png
-rm ~/Downloads/wind-turbine-shutterstock.png
-rm ~/Downloads/forest-landscape.png
-rm "~/Downloads/ChatGPT Image Jun 10 2026, 03_22_45 PM.png"
+extensions/image-staging/test-data/teardown-test.sh
 ```
 
-Or remove the entire test repo:
+This will:
 
-```bash
-rm -rf ~/test-repo-oat
-```
+1. Remove test images from `~/Downloads/`
+2. Remove test repo from `~/test-repo-oat/`
+
+The original files in `extensions/image-staging/test-data/` remain in the repo for future testing.
 
 ## Notes
 

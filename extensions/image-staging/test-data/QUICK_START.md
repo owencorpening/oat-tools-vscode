@@ -3,9 +3,8 @@
 ## 30-Second Setup
 
 ```bash
-# Copy test data
-cp extensions/image-staging/test-data/downloads/* ~/Downloads/
-cp -r extensions/image-staging/test-data/repo ~/test-repo-oat
+# Run setup script
+extensions/image-staging/test-data/setup-test.sh
 
 # Open in VSCode
 code ~/test-repo-oat
@@ -17,15 +16,15 @@ code ~/test-repo-oat
 2. **Search**: Type "water" in OAT Images panel
 3. **Stage**: Click "Stage" on a result
 4. **Place**: Click "Place Figure" on staged image
-5. **Verify**: 
+5. **Verify**:
    - ✓ Snippet appears in editor
    - ✓ Figure 1 is created
    - ✓ Success message shows
 
 ## Useful Test Cases
 
-| Workflow | File | Expected | 
-|----------|------|----------|
+| Workflow | File | Expected |
+| --- | --- | --- |
 | **Substack placement** | `substack-ideas/water-series/part-01-intro.md` | Target = "substack", Figure 1 |
 | **Carousel placement** | `carousels/ocean-carousel.md` | Target = "carousel", Marp format |
 | **Multiple figures** | Place 2+ images | Figure numbers 1, 2, 3... |
@@ -35,18 +34,13 @@ code ~/test-repo-oat
 ## Cleanup
 
 ```bash
-# Remove test images from Downloads
-rm ~/Downloads/{water-droplet,ocean-wave,solar-panel,wind-turbine,forest-landscape}*.png
-rm "~/Downloads/ChatGPT Image"*.png
-
-# Remove test repo
-rm -rf ~/test-repo-oat
+extensions/image-staging/test-data/teardown-test.sh
 ```
 
 ## Troubleshooting
 
 | Issue | Solution |
-|-------|----------|
+| --- | --- |
 | No search results | Verify test images are in `~/Downloads/` |
 | "Open markdown draft" error | Make sure the .md file is open in editor |
 | Figure number off | Check if other figures exist in the document (uses highest + 1) |
@@ -55,6 +49,7 @@ rm -rf ~/test-repo-oat
 ## Common Searches
 
 Try these searches in the OAT panel:
+
 - "water" → finds water-droplet, ocean-wave
 - "solar" → finds solar-panel
 - "wind" → finds wind-turbine
