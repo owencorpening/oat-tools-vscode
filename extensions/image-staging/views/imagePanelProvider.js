@@ -1044,6 +1044,13 @@ function figureNumbersFromText(text = '') {
 
 function captionSuggestionForImage(image = {}) {
   const title = image.title || image.displayName || image.name || image.sourceName || 'Untitled image';
+
+  // For provider images (Pexels, etc.), just use title. Provenance is handled separately.
+  if (image.provider && image.provider !== 'downloads') {
+    return title;
+  }
+
+  // For Downloads images, include full attribution
   const parts = [title];
 
   if (image.attribution) {
