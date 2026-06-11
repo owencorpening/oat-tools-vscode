@@ -440,13 +440,29 @@ body {
   font-size: 12px;
 }
 .search-btn:hover { background: var(--vscode-button-hoverBackground); }
+.browse-btn {
+  padding: 4px 8px; border: none; border-radius: 3px;
+  background: var(--vscode-button-secondaryBackground);
+  color: var(--vscode-button-secondaryForeground);
+  cursor: pointer; font-family: var(--vscode-font-family);
+  font-size: 12px;
+}
+.browse-btn:hover { background: var(--vscode-button-secondaryHoverBackground, #555); }
 .search-input:disabled,
-.search-btn:disabled {
+.search-btn:disabled,
+.browse-btn:disabled {
   opacity: 0.55; cursor: not-allowed;
 }
 .section-title {
-  padding: 7px 8px 4px;
-  font-size: 11px; opacity: 0.72; text-transform: uppercase;
+  padding: 10px 8px 8px;
+  margin-top: 8px;
+  border-top: 1px solid var(--vscode-panel-border);
+  border-bottom: 1px solid var(--vscode-panel-border);
+  background: var(--vscode-editor-background);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--vscode-foreground);
+  text-transform: uppercase;
 }
 #status { padding: 16px; text-align: center; opacity: 0.6; font-size: 12px; }
 .search-status { padding: 8px; opacity: 0.6; font-size: 11px; }
@@ -547,6 +563,7 @@ body {
 <form class="searchbar" id="searchForm">
   <input class="search-input" id="searchInput" type="search" placeholder="Search Pexels + Downloads">
   <button class="search-btn" type="submit">Search</button>
+  <button class="browse-btn" id="browseBtn" type="button" title="Browse all Downloads">⬇ Downloads</button>
 </form>
 <div id="searchStatus" class="search-status" style="display:none"></div>
 <div id="results"></div>
@@ -572,9 +589,18 @@ document.getElementById('searchForm').addEventListener('submit', event => {
   event.preventDefault();
   const query = document.getElementById('searchInput').value.trim();
   if (!query) return;
+  _currentProvider = 'Downloads + Pexels';
   providerResults = [];
   renderProviderResults('Searching…');
   vscode.postMessage({ type: 'providerSearch', query, providers: ['downloads', 'pexels'] });
+});
+
+document.getElementById('browseBtn').addEventListener('click', event => {
+  event.preventDefault();
+  _currentProvider = 'Downloads';
+  providerResults = [];
+  renderProviderResults('Loading Downloads…');
+  vscode.postMessage({ type: 'providerSearch', query: '*', providers: ['downloads'] });
 });
 
 const resultsEl = document.getElementById('results');
@@ -591,6 +617,7 @@ listEl.addEventListener('click', e => {
 
 let _timeoutId = null;
 let _lastStagedIndex = null;
+let _currentProvider = 'downloads + pexels';
 
 window.addEventListener('message', e => {
   const msg = e.data;
@@ -665,7 +692,7 @@ function renderProviderResults(message) {
     return !isStaged;
   });
 
-  results.innerHTML = '<div class="section-title">Provider Results</div>' + filterableResults.map((img, displayIndex) => {
+  results.innerHTML = '<div class="section-title">Showing: ' + _currentProvider + '</div>' + filterableResults.map((img, displayIndex) => {
     const actualIndex = providerResults.indexOf(img);
     const previewSrc = img.previewUrl || img.thumbnailUrl || img.imageSrc;
     const thumbHtml = previewSrc
