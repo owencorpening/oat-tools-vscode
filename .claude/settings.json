@@ -22,7 +22,13 @@
       "Bash(mkdir -p /tmp/oat-test/substack-ideas/test-water-series)",
       "Bash(node /tmp/create_test_png.js)",
       "Bash(node /tmp/test-placement-workflow.js)",
-      "Bash(node extensions/image-staging/test/imagePanelProviderIntegration.test.js)"
+      "Bash(node extensions/image-staging/test/imagePanelProviderIntegration.test.js)",
+      "Bash(chmod +x extensions/image-staging/test-data/setup-test.sh extensions/image-staging/test-data/teardown-test.sh)",
+      "Bash(curl -s https://api.github.com/repos/anthropics/claude-code/issues/59303)",
+      "Bash(curl -s https://api.github.com/repos/anthropics/claude-code/issues/60937)",
+      "Bash(extensions/image-staging/test-data/teardown-test.sh)",
+      "Bash(extensions/image-staging/test-data/setup-test.sh)",
+      "Bash(chmod +x /home/owen/dev/oat-tools-vscode/extensions/image-staging/test-data/db-status.sh)"
     ],
     "additionalDirectories": [
       "/tmp/oat-test/substack-ideas"
