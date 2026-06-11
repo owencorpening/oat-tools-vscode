@@ -15,7 +15,7 @@ TEST_REPO_DIR="$TEST_DATA_DIR/repo"
 DOWNLOADS_DIR="$HOME/Downloads"
 TEST_REPO_COPY="$HOME/test-repo-oat"
 LEDGER_PID_FILE="/tmp/oat-test-ledger.pid"
-LEDGER_PORT=3001
+LEDGER_PORT=8787
 
 echo "Setting up ad-hoc test environment..."
 echo ""
@@ -31,11 +31,13 @@ rm -f "$DOWNLOADS_DIR/ChatGPT Image Jun 10 2026, 03_22_45 PM.png"
 if [ -d "$TEST_REPO_COPY" ]; then
   rm -rf "$TEST_REPO_COPY"
 fi
-# Kill any existing ledger process
+# Kill any existing ledger process (by PID or port)
 if [ -f "$LEDGER_PID_FILE" ]; then
   kill $(cat "$LEDGER_PID_FILE") 2>/dev/null || true
   rm -f "$LEDGER_PID_FILE"
 fi
+# Also kill any process on the ledger port
+lsof -i :$LEDGER_PORT 2>/dev/null | grep -v COMMAND | awk '{print $2}' | xargs -r kill 2>/dev/null || true
 echo "   ✓ Old test data removed"
 
 # 2. Copy fresh test images
